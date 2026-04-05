@@ -8,66 +8,52 @@ if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 fi
 
-echo "[devcontainer] Installing Python project dependencies"
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
+STATE_DIR="${HOME}/.cache/piclaw-devcontainer"
+STATE_FILE="${STATE_DIR}/bootstrap.sha256"
+mkdir -p "${STATE_DIR}"
 
-echo "[devcontainer] Upgrading npm to latest"
-npm install -g npm@latest
+# Re-run expensive setup only when bootstrap inputs change.
+BOOTSTRAP_HASH="$({
+  printf '%s\n' 'post-create-v4'
+} | sha256sum | awk '{print $1}')"
 
-echo "[devcontainer] Installing Ansible collections"
-ansible-galaxy collection install -r collections/requirements.yml
-
-echo "[devcontainer] Installing pre-commit hooks"
-pre-commit install
-
-if ! command -v snyk >/dev/null 2>&1; then
-  echo "[devcontainer] Installing Snyk CLI"
-  npm install -g snyk
-else
-  echo "[devcontainer] Snyk CLI already installed"
+BOOTSTRAP_NEEDED="true"
+if [[ -f "${STATE_FILE}" ]] && [[ "$(cat "${STATE_FILE}")" == "${BOOTSTRAP_HASH}" ]]; then
+  BOOTSTRAP_NEEDED="false"
 fi
 
-if ! command -v sonar-scanner >/dev/null 2>&1; then
-  echo "[devcontainer] Installing sonar-scanner CLI"
-  SCANNER_VERSION="6.2.1.4610"
-  ARCH="$(uname -m)"
-  case "$ARCH" in
-    x86_64)
-      SCANNER_ARCH="linux-x64"
-      ;;
-    aarch64|arm64)
-      SCANNER_ARCH="linux-aarch64"
-      ;;
-    *)
-      echo "[devcontainer] Unsupported architecture for sonar-scanner: $ARCH"
-      exit 1
-      ;;
-  esac
+# Required by Snyk and other tools that read a machine identifier
+if [[ ! -f /etc/machine-id ]]; then
+  ${SUDO} sh -c 'cat /proc/sys/kernel/random/uuid | tr -d "-" > /etc/machine-id'
+fi
 
-  SCANNER_ZIP="sonar-scanner-cli-${SCANNER_VERSION}-${SCANNER_ARCH}.zip"
-  SCANNER_URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SCANNER_ZIP}"
+if [[ "${BOOTSTRAP_NEEDED}" == "true" ]]; then
+  echo "[devcontainer] Running lightweight workspace bootstrap"
 
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$SCANNER_URL" -o "/tmp/${SCANNER_ZIP}"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q "$SCANNER_URL" -O "/tmp/${SCANNER_ZIP}"
-  else
-    echo "[devcontainer] Neither curl nor wget is available to download sonar-scanner"
+  echo "[devcontainer] Installing Snyk CLI"
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "[devcontainer] ERROR: npm is required but was not found in PATH"
     exit 1
   fi
 
-  python3 - <<PY
-import zipfile
-zipfile.ZipFile('/tmp/${SCANNER_ZIP}').extractall('/tmp')
-PY
+  # Prefer non-root install; retry with sudo for images configured with system-wide npm prefix.
+  if ! npm install -g npm@latest snyk; then
+    if [[ -n "${SUDO}" ]]; then
+      ${SUDO} npm install -g npm@latest snyk
+    else
+      echo "[devcontainer] ERROR: failed to install snyk globally with npm"
+      exit 1
+    fi
+  fi
 
-  chmod +x "/tmp/sonar-scanner-${SCANNER_VERSION}-${SCANNER_ARCH}/bin/sonar-scanner"
-  chmod +x "/tmp/sonar-scanner-${SCANNER_VERSION}-${SCANNER_ARCH}/jre/bin/java"
+  echo "[devcontainer] Installing pre-commit hooks"
+  pre-commit install
+else
+  echo "[devcontainer] Workspace bootstrap already up to date; skipping"
+fi
 
-  ${SUDO} rm -rf "/opt/sonar-scanner-${SCANNER_VERSION}-${SCANNER_ARCH}"
-  ${SUDO} mv "/tmp/sonar-scanner-${SCANNER_VERSION}-${SCANNER_ARCH}" /opt/
-  ${SUDO} ln -sf "/opt/sonar-scanner-${SCANNER_VERSION}-${SCANNER_ARCH}/bin/sonar-scanner" /usr/local/bin/sonar-scanner
+if [[ "${BOOTSTRAP_NEEDED}" == "true" ]]; then
+  echo "${BOOTSTRAP_HASH}" > "${STATE_FILE}"
 fi
 
 echo "[devcontainer] Tool versions"

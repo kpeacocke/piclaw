@@ -1,6 +1,9 @@
 {
   "name": "piclaw-dev",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/node:1": {
@@ -23,7 +26,6 @@
         "redhat.vscode-yaml",
         "github.vscode-github-actions",
         "sonarsource.sonarlint-vscode",
-        "snyk-security.snyk-vulnerability-scanner",
         "eamodio.gitlens",
         "streetsidesoftware.code-spell-checker"
       ]

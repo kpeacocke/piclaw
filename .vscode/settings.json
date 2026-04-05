@@ -1,6 +1,5 @@
 {
-    "snyk.advanced.autoSelectOrganization": true,
-    "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e",
+    "sonarlint.pathToNodeExecutable": "/usr/local/share/nvm/current/bin/node",
 
     "python.testing.pytestEnabled": true,
     "python.testing.unittestEnabled": false,
@@ -8,13 +7,16 @@
         "tests"
     ],
 
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "strict",
     "python.analysis.diagnosticMode": "workspace",
 
     "ruff.nativeServer": "on",
-    "ruff.lint.run": "onType",
 
     "mypy-type-checker.importStrategy": "fromEnvironment",
+    "mypy-type-checker.args": [
+        "--config-file",
+        "${workspaceFolder}/mypy.ini"
+    ],
     "mypy-type-checker.reportingScope": "workspace",
 
     "[python]": {
@@ -42,5 +44,6 @@
         "ruff",
         "sonarqube",
         "snyk"
-    ]
+    ],
+    "snyk.advanced.autoSelectOrganization": true
 }

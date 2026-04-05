@@ -10,7 +10,6 @@
     "redhat.vscode-yaml",
     "github.vscode-github-actions",
     "sonarsource.sonarlint-vscode",
-    "snyk-security.snyk-vulnerability-scanner",
     "eamodio.gitlens",
     "streetsidesoftware.code-spell-checker"
   ]
