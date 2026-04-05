@@ -1,0 +1,49 @@
+name: devcontainer-smoke
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  pull_request:
+    paths:
+      - .devcontainer/**
+      - requirements-dev.txt
+      - collections/requirements.yml
+      - .github/workflows/devcontainer-smoke.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .devcontainer/**
+      - requirements-dev.txt
+      - collections/requirements.yml
+      - .github/workflows/devcontainer-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devcontainer-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build container and validate toolchain
+        uses: devcontainers/ci@v0.3
+        with:
+          runCmd: |
+            bash .devcontainer/post-create.sh
+            gh --version | head -n 1
+            ansible --version | head -n 1
+            ansible-lint --version | head -n 1
+            molecule --version | head -n 1
+            pytest --version
+            snyk --version
+            sonar-scanner --version | head -n 1

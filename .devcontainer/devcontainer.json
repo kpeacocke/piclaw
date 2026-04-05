@@ -1,0 +1,37 @@
+{
+  "name": "piclaw-dev",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "redhat.ansible",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions",
+        "sonarsource.sonarlint-vscode",
+        "snyk-security.snyk-vulnerability-scanner",
+        "eamodio.gitlens",
+        "streetsidesoftware.code-spell-checker"
+      ]
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteEnv": {
+    "PATH": "/home/vscode/.local/bin:/usr/local/share/nvm/current/bin:${containerEnv:PATH}"
+  },
+  "remoteUser": "vscode"
+}
