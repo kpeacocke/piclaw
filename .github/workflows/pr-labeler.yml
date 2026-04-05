@@ -13,4 +13,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Label PR based on changed files
-        uses: actions/labeler@v5
+        uses: actions/labeler@v6
