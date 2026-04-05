@@ -1,22 +1,37 @@
 name: Bug report
 description: Report a reproducible problem.
-title: "bug: "
+title: "bug: <short description>"
 labels:
   - bug
 body:
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What happened vs expected?
+      label: What happened?
+      description: Describe the problem and what you expected instead.
     validations:
       required: true
 
   - type: textarea
     id: reproduce
     attributes:
-      label: Reproduce
-      description: Exact command(s) and the failing task.
+      label: Steps to reproduce
+      description: Exact playbook command and the task name that failed.
+      placeholder: |
+        ansible-playbook playbooks/bootstrap.yml -l pi5
+        # failing task: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: playbook
+    attributes:
+      label: Affected playbook
+      options:
+        - bootstrap.yml
+        - openclaw.yml
+        - verify.yml
+        - Other / unknown
     validations:
       required: true
 
@@ -24,12 +39,27 @@ body:
     id: environment
     attributes:
       label: Environment
-      placeholder: "Pi model, OS version, AI HAT model"
+      placeholder: |
+        Pi model: Raspberry Pi 5
+        OS: Raspberry Pi OS Trixie 64-bit
+        AI HAT: AI HAT+ 2 (Hailo-10H)
+        ansible-core version:
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: Paste concise output.
+      label: Relevant output or logs
+      description: Paste the failing task output. Redact any private host details.
+      render: shell
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: Hardware is confirmed seated and PSU is stable
+          required: true
+        - label: I searched existing issues and this is not a duplicate
+          required: true

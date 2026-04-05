@@ -1,21 +1,52 @@
 name: Feature request
-description: Suggest an improvement.
-title: "feature: "
+description: Suggest an improvement to roles, playbooks, validation, or CI.
+title: "feat: <short description>"
 labels:
   - enhancement
 body:
   - type: textarea
-    id: goal
+    id: problem
     attributes:
-      label: Goal
-      description: Desired outcome.
+      label: Problem or motivation
+      description: What limitation or gap does this address?
     validations:
       required: true
 
   - type: textarea
     id: proposal
     attributes:
-      label: Proposal
-      description: Suggested change.
+      label: Proposed solution
+      description: How would you implement or configure this?
     validations:
       required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - roles/base
+        - roles/hailo
+        - roles/hailo_ollama
+        - roles/openclaw
+        - roles/validate
+        - playbooks
+        - CI / GitHub Actions
+        - docs
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you ruled out.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
