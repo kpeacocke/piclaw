@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Publish release draft using SemVer
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@v7
         with:
           publish: true
           prerelease: ${{ inputs.prerelease }}
