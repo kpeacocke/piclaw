@@ -14,9 +14,9 @@ repos:
       - id: yamllint
 
   - repo: https://github.com/ansible/ansible-lint
-    rev: v24.7.0
+    rev: v26.4.0
     hooks:
       - id: ansible-lint
         files: ^(playbooks/|roles/|inventories/|group_vars/)
         additional_dependencies:
-          - ansible-core>=2.17,<2.20
+          - ansible-core>=2.20,<2.21
