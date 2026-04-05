@@ -1,0 +1,6 @@
+---
+# Encrypt this file in real use:
+# ansible-vault encrypt group_vars/pi5.vault.yml
+
+vault_openclaw_admin_password: change-me
+vault_optional_api_token: change-me

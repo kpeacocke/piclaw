@@ -1,0 +1,40 @@
+---
+job_templates:
+  - name: piclaw-bootstrap
+    description: Baseline OS + Hailo runtime install and validation
+    inventory: pi5-prod
+    project: piclaw
+    playbook: playbooks/bootstrap.yml
+    job_type: run
+    credentials:
+      - pi5-ssh
+      - pi5-vault
+    ask_variables_on_launch: true
+    survey_enabled: true
+    survey_spec_ref: awx/surveys.yml#/surveys/bootstrap
+
+  - name: piclaw-openclaw
+    description: Install/verify Hailo Ollama model stack and OpenClaw
+    inventory: pi5-prod
+    project: piclaw
+    playbook: playbooks/openclaw.yml
+    job_type: run
+    credentials:
+      - pi5-ssh
+      - pi5-vault
+    ask_variables_on_launch: true
+    survey_enabled: true
+    survey_spec_ref: awx/surveys.yml#/surveys/openclaw
+
+  - name: piclaw-verify
+    description: End-to-end validation of known-good state
+    inventory: pi5-prod
+    project: piclaw
+    playbook: playbooks/verify.yml
+    job_type: run
+    credentials:
+      - pi5-ssh
+      - pi5-vault
+    ask_variables_on_launch: true
+    survey_enabled: true
+    survey_spec_ref: awx/surveys.yml#/surveys/verify

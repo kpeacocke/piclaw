@@ -4,8 +4,16 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    labels:
+      - dependencies
+      - dependabot
+      - pip
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    labels:
+      - dependencies
+      - dependabot
+      - github-actions

@@ -13,6 +13,8 @@ env/
 # Ansible artifacts
 *.retry
 ansible.log
+.vault_pass
+.vault_pass.*
 
 # OS/editor
 .DS_Store

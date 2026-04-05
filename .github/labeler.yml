@@ -19,3 +19,15 @@ dependencies:
   - changed-files:
       - any-glob-to-any-file: "requirements-dev.txt"
       - any-glob-to-any-file: "collections/requirements.yml"
+
+dependabot:
+  - head-branch:
+      - "^dependabot/"
+
+pip:
+  - head-branch:
+      - "^dependabot/pip/"
+
+github-actions:
+  - head-branch:
+      - "^dependabot/github_actions/"

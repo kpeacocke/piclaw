@@ -1,0 +1,8 @@
+---
+- name: Molecule syntax-only converge placeholder
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Placeholder task
+      ansible.builtin.debug:
+        msg: Molecule scenario is syntax/lint focused for this hardware-specific repo.

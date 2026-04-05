@@ -1,0 +1,44 @@
+---
+surveys:
+  bootstrap:
+    name: piclaw-bootstrap-survey
+    description: Runtime variables for bootstrap execution
+    questions:
+      - variable: target_limit
+        type: text
+        question: Ansible limit
+        required: false
+        default: pi5
+
+  openclaw:
+    name: piclaw-openclaw-survey
+    description: Runtime variables for model and provider
+    questions:
+      - variable: hailo_model
+        type: text
+        question: Hailo model tag
+        required: true
+        default: qwen2:1.5b
+      - variable: use_sanitizer_proxy
+        type: multiplechoice
+        question: Enable sanitizer proxy
+        required: true
+        choices:
+          - "true"
+          - "false"
+        default: "true"
+
+  verify:
+    name: piclaw-verify-survey
+    description: Runtime controls for verification timeout and target
+    questions:
+      - variable: chat_smoke_timeout_seconds
+        type: integer
+        question: Chat smoke test timeout seconds
+        required: true
+        default: 45
+      - variable: target_limit
+        type: text
+        question: Ansible limit
+        required: false
+        default: pi5

@@ -1,0 +1,147 @@
+- name: bug
+  color: d73a4a
+  description: Something is not working
+
+- name: enhancement
+  color: a2eeef
+  description: New feature or request
+
+- name: documentation
+  color: 0075ca
+  description: Documentation updates
+
+- name: question
+  color: d876e3
+  description: Questions or clarifications
+
+- name: help wanted
+  color: 008672
+  description: Community help is welcome
+
+- name: good first issue
+  color: 7057ff
+  description: Good for new contributors
+
+- name: duplicate
+  color: cfd3d7
+  description: Duplicate issue or PR
+
+- name: invalid
+  color: e4e669
+  description: Not valid or actionable
+
+- name: wontfix
+  color: ffffff
+  description: Will not be worked on
+
+- name: security
+  color: b60205
+  description: Security-related change or report
+
+- name: pinned
+  color: 0052cc
+  description: Priority item exempt from stale automation
+
+- name: stale
+  color: fef2c0
+  description: No recent activity
+
+- name: ci
+  color: 1d76db
+  description: Continuous integration and workflows
+
+- name: chore
+  color: fef2c0
+  description: Maintenance work
+
+- name: fix
+  color: d73a4a
+  description: Bug fix label for release automation
+
+- name: feature
+  color: 0e8a16
+  description: Feature label for release automation
+
+- name: breaking-change
+  color: b60205
+  description: SemVer major change
+
+- name: skip-changelog
+  color: c5def5
+  description: Exclude from release notes
+
+- name: ansible
+  color: 5319e7
+  description: Ansible roles/playbooks changes
+
+- name: dependencies
+  color: 0366d6
+  description: Dependency updates
+
+- name: dependabot
+  color: 0366d6
+  description: Pull request created by Dependabot
+
+- name: github-actions
+  color: 24292f
+  description: GitHub Actions dependency updates
+
+- name: pip
+  color: 2b67c6
+  description: Python/pip dependency updates
+
+- name: npm
+  color: cb3837
+  description: npm dependency updates
+
+- name: maven
+  color: b44c43
+  description: Maven dependency updates
+
+- name: gradle
+  color: 02303a
+  description: Gradle dependency updates
+
+- name: nuget
+  color: 512bd4
+  description: NuGet dependency updates
+
+- name: go
+  color: 00add8
+  description: Go module dependency updates
+
+- name: terraform
+  color: 623ce4
+  description: Terraform dependency updates
+
+- name: docker
+  color: 2496ed
+  description: Docker dependency updates
+
+- name: composer
+  color: 885630
+  description: Composer dependency updates
+
+- name: bundler
+  color: a42e2b
+  description: Bundler dependency updates
+
+- name: cargo
+  color: dea584
+  description: Cargo dependency updates
+
+- name: elm
+  color: 60b5cc
+  description: Elm dependency updates
+
+- name: devcontainer
+  color: 0db7ed
+  description: Devcontainer dependency updates
+
+- name: submodules
+  color: 6f42c1
+  description: Git submodule dependency updates
+
+- name: automerge
+  color: 0e8a16
+  description: Safe for automatic merge policies

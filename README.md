@@ -26,6 +26,10 @@ This repository enforces a known-good state for Raspberry Pi 5 + AI HAT+ 2 using
 - `playbooks/bootstrap.yml`
 - `playbooks/openclaw.yml`
 - `playbooks/verify.yml`
+- `awx/job_templates.yml`
+- `awx/surveys.yml`
+- `group_vars/pi5.vault.yml.example`
+- `molecule/default`
 
 ## Configure Variables
 
@@ -42,6 +46,13 @@ Edit `group_vars/pi5.yml`:
 - `openclaw_config_path` (if your install path differs)
 
 Edit inventory host target in `inventories/prod/hosts.yml`.
+
+For encrypted secrets, copy `group_vars/pi5.vault.yml.example` to `group_vars/pi5.vault.yml` and encrypt it:
+
+```bash
+cp group_vars/pi5.vault.yml.example group_vars/pi5.vault.yml
+ansible-vault encrypt group_vars/pi5.vault.yml
+```
 
 ## Execution Order
 
@@ -71,6 +82,7 @@ pre-commit run --all-files
 ansible-playbook --syntax-check playbooks/bootstrap.yml
 ansible-playbook --syntax-check playbooks/openclaw.yml
 ansible-playbook --syntax-check playbooks/verify.yml
+molecule test -s default
 ```
 
 See `CONTRIBUTING.md` for contribution workflow details.
@@ -84,6 +96,9 @@ See `CONTRIBUTING.md` for contribution workflow details.
 - PR auto-labeling by changed paths:
 	- `.github/workflows/pr-labeler.yml`
 	- `.github/labeler.yml`
+- Label bootstrap/sync:
+	- `.github/workflows/label-sync.yml`
+	- `.github/labels.yml`
 - Stale issue/PR lifecycle automation:
 	- `.github/workflows/stale.yml`
 - Release draft automation:
@@ -93,6 +108,8 @@ See `CONTRIBUTING.md` for contribution workflow details.
 	- `.github/workflows/semantic-pr.yml`
 - Manual publish of SemVer release from draft:
 	- `.github/workflows/publish-release.yml`
+- OpenSSF Scorecard security posture workflow:
+	- `.github/workflows/scorecard.yml`
 - Dependabot for `pip` and GitHub Actions updates:
 	- `.github/dependabot.yml`
 - PR template and issue templates:

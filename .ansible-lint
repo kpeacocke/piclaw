@@ -1,8 +1,20 @@
 ---
-profile: production
+profile: basic
 exclude_paths:
   - .venv/
   - venv/
   - .git/
+  - .github/
+  - awx/
+  - molecule/
+  - .pre-commit-config.yaml
+skip_list:
+  - var-naming[no-role-prefix]
+  - risky-shell-pipe
+  - no-handler
+  - latest[git]
+  - no-changed-when
+  - command-instead-of-module
+  - yaml[document-start]
 warn_list:
   - fqcn-builtins
