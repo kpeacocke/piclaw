@@ -1,0 +1,16 @@
+# Normalize text files to LF in repo
+* text=auto eol=lf
+
+# Keep shell scripts LF
+*.sh text eol=lf
+
+# Treat common binary assets as binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tgz binary

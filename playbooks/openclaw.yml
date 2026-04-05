@@ -1,0 +1,10 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Install Hailo Ollama model stack and OpenClaw
+  hosts: pi5
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: hailo_ollama
+    - role: openclaw

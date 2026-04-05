@@ -1,0 +1,93 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Ensure installer parent directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_installer_dest | dirname }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Clone or update OpenClaw installer repository
+  ansible.builtin.git:
+    repo: "{{ openclaw_installer_repo }}"
+    dest: "{{ openclaw_installer_dest }}"
+    update: true
+  become: true
+
+- name: Check installer script presence
+  ansible.builtin.stat:
+    path: "{{ openclaw_installer_dest }}/install.sh"
+  register: openclaw_install_script
+
+- name: Fail when installer script is missing
+  ansible.builtin.assert:
+    that:
+      - openclaw_install_script.stat.exists
+    fail_msg: Installer script not found at {{ openclaw_installer_dest }}/install.sh.
+
+- name: Run OpenClaw installer non-interactively
+  ansible.builtin.command: bash install.sh
+  args:
+    chdir: "{{ openclaw_installer_dest }}"
+  environment:
+    CLAW_FLAVOR: "{{ claw_flavor }}"
+    USE_SANITIZER_PROXY_ON_OLLAMA: "{{ (use_sanitizer_proxy | bool) | ternary('true', 'false') }}"
+    HAILO_MODEL: "{{ hailo_model }}"
+  become: true
+
+- name: Ensure Hailo Ollama service is active
+  ansible.builtin.systemd:
+    name: "{{ hailo_ollama_service_name }}"
+    enabled: true
+    state: started
+  become: true
+
+- name: Ensure sanitizer proxy service is active when enabled
+  ansible.builtin.systemd:
+    name: "{{ hailo_proxy_service_name }}"
+    enabled: true
+    state: started
+  when: use_sanitizer_proxy | bool
+  become: true
+
+- name: Ensure sanitizer proxy service is disabled when not enabled
+  ansible.builtin.systemd:
+    name: "{{ hailo_proxy_service_name }}"
+    enabled: false
+    state: stopped
+  when: not (use_sanitizer_proxy | bool)
+  become: true
+
+- name: Verify OpenClaw gateway/process is active
+  ansible.builtin.shell: |
+    systemctl is-active openclaw || \
+    systemctl is-active openclaw-gateway || \
+    systemctl is-active claw-gateway
+  args:
+    executable: /bin/bash
+  register: openclaw_service_check
+  changed_when: false
+  failed_when: openclaw_service_check.rc != 0
+  become: true
+
+- name: Check OpenClaw provider config file exists
+  ansible.builtin.stat:
+    path: "{{ openclaw_config_path }}"
+  register: openclaw_cfg
+
+- name: Fail if OpenClaw config path does not exist
+  ansible.builtin.assert:
+    that:
+      - openclaw_cfg.stat.exists
+    fail_msg: OpenClaw config file was not found at {{ openclaw_config_path }}.
+
+- name: Read OpenClaw config file
+  ansible.builtin.slurp:
+    path: "{{ openclaw_config_path }}"
+  register: openclaw_cfg_content
+
+- name: Verify OpenClaw provider base URL is configured
+  ansible.builtin.assert:
+    that:
+      - (openclaw_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
+    fail_msg: OpenClaw provider URL does not match {{ openclaw_provider_base_url }}.

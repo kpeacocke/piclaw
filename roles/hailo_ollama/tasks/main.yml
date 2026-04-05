@@ -1,0 +1,79 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Install Hailo GenAI model-zoo package (latest)
+  ansible.builtin.apt:
+    name: "{{ hailo_genai_package }}"
+    state: present
+  when: hailo_genai_package_version | length == 0
+  become: true
+
+- name: Install Hailo GenAI model-zoo package (pinned version)
+  ansible.builtin.apt:
+    name: "{{ hailo_genai_package }}={{ hailo_genai_package_version }}"
+    state: present
+  when: hailo_genai_package_version | length > 0
+  become: true
+
+- name: Ensure Hailo Ollama service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ hailo_ollama_service_name }}"
+    enabled: true
+    state: started
+  become: true
+
+- name: Wait for Hailo Ollama API readiness
+  ansible.builtin.uri:
+    url: "http://{{ hailo_bind_host }}:{{ hailo_port }}/api/version"
+    method: GET
+    status_code: 200
+  register: hailo_version
+  retries: 30
+  delay: 2
+  until: hailo_version.status == 200
+
+- name: Pull selected local model
+  ansible.builtin.uri:
+    url: "http://{{ hailo_bind_host }}:{{ hailo_port }}/api/pull"
+    method: POST
+    body_format: json
+    body:
+      model: "{{ hailo_model }}"
+    status_code: 200
+    timeout: 1800
+  register: hailo_pull
+
+- name: Verify selected model exists
+  ansible.builtin.uri:
+    url: "http://{{ hailo_bind_host }}:{{ hailo_port }}/api/tags"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: hailo_tags
+
+- name: Assert selected model is present
+  ansible.builtin.assert:
+    that:
+      - (hailo_tags.json.models | default([]) | map(attribute='name') | list) is contains(hailo_model)
+    fail_msg: "Model {{ hailo_model }} was not found in /api/tags."
+
+- name: Perform chat smoke test against local backend
+  ansible.builtin.uri:
+    url: "http://{{ hailo_bind_host }}:{{ hailo_port }}/api/chat"
+    method: POST
+    body_format: json
+    body:
+      model: "{{ hailo_model }}"
+      stream: false
+      messages:
+        - role: user
+          content: "Reply with one short sentence confirming readiness."
+    status_code: 200
+    return_content: true
+    timeout: "{{ chat_smoke_timeout_seconds }}"
+  register: hailo_chat
+
+- name: Assert chat response contains non-empty content
+  ansible.builtin.assert:
+    that:
+      - (hailo_chat.json.message.content | default('') | trim | length) > 0
+    fail_msg: Local backend chat smoke test returned empty content.

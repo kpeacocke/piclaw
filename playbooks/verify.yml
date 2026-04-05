@@ -1,0 +1,9 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Validate end-to-end known-good state
+  hosts: pi5
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: validate

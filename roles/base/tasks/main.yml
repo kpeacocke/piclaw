@@ -1,0 +1,54 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Full upgrade OS packages
+  ansible.builtin.apt:
+    upgrade: full
+  become: true
+
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name:
+      - dkms
+      - git
+      - curl
+      - jq
+      - python3-venv
+      - python3-pip
+      - pciutils
+    state: present
+  become: true
+
+- name: Apply EEPROM updates
+  ansible.builtin.command: rpi-eeprom-update -a
+  register: eeprom_update
+  changed_when: >-
+    'updating' in (eeprom_update.stdout | lower) or
+    'update applied' in (eeprom_update.stdout | lower)
+  become: true
+
+- name: Check whether reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Reboot after base upgrade or EEPROM update
+  ansible.builtin.reboot:
+    msg: Reboot initiated by Ansible after baseline upgrade.
+    reboot_timeout: 900
+    post_reboot_delay: 10
+  when: reboot_required.stat.exists or eeprom_update.changed
+  become: true
+
+- name: Verify Hailo PCIe device is detected
+  ansible.builtin.shell: lspci | grep -i hailo
+  args:
+    executable: /bin/bash
+  register: hailo_lspci
+  changed_when: false
+  failed_when: hailo_lspci.rc != 0

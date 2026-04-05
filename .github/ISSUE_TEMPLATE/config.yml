@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kpeacocke/piclaw/security/advisories/new
+    about: Report privately via GitHub Security Advisories.
+
+  - name: Support request
+    url: https://github.com/kpeacocke/piclaw/discussions
+    about: Ask usage/setup questions in Discussions.

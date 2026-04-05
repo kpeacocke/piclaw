@@ -1,0 +1,10 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Bootstrap Pi 5 baseline and Hailo runtime
+  hosts: pi5
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: base
+    - role: hailo

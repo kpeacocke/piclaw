@@ -1,0 +1,8 @@
+---
+profile: production
+exclude_paths:
+  - .venv/
+  - venv/
+  - .git/
+warn_list:
+  - fqcn-builtins
