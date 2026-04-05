@@ -1,0 +1,21 @@
+ansible:
+  - changed-files:
+      - any-glob-to-any-file: "playbooks/**"
+      - any-glob-to-any-file: "roles/**"
+      - any-glob-to-any-file: "inventories/**"
+      - any-glob-to-any-file: "group_vars/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/workflows/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: "README.md"
+      - any-glob-to-any-file: "CONTRIBUTING.md"
+      - any-glob-to-any-file: ".github/*.md"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: "requirements-dev.txt"
+      - any-glob-to-any-file: "collections/requirements.yml"

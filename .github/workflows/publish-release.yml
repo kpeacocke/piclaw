@@ -1,0 +1,30 @@
+name: publish-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Publish as prerelease"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Publish release draft using SemVer
+        uses: release-drafter/release-drafter@v6
+        with:
+          publish: true
+          prerelease: ${{ inputs.prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

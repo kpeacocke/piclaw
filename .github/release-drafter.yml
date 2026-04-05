@@ -1,0 +1,65 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+filter-by-commitish: true
+
+change-template: "- $TITLE by @$AUTHOR in #$NUMBER"
+
+version-resolver:
+  major:
+    labels:
+      - breaking-change
+  minor:
+    labels:
+      - enhancement
+      - feature
+  patch:
+    labels:
+      - bug
+      - fix
+      - dependencies
+      - chore
+  default: patch
+
+autolabeler:
+  - label: breaking-change
+    title:
+      - '/^(feat|fix|perf|refactor)(\(.+\))?!:/i'
+      - '/breaking change/i'
+  - label: feature
+    title:
+      - '/^feat(\(.+\))?:/i'
+  - label: fix
+    title:
+      - '/^(fix|perf|refactor)(\(.+\))?:/i'
+  - label: chore
+    title:
+      - '/^(chore|build|ci|docs|test)(\(.+\))?:/i'
+  - label: dependencies
+    title:
+      - '/deps?/i'
+
+categories:
+  - title: "Breaking Changes"
+    labels:
+      - breaking-change
+  - title: "Features"
+    labels:
+      - enhancement
+      - feature
+  - title: "Fixes"
+    labels:
+      - bug
+      - fix
+  - title: "Maintenance"
+    labels:
+      - dependencies
+      - chore
+      - ci
+
+exclude-labels:
+  - skip-changelog
+
+template: |
+  ## Changes
+
+  $CHANGES

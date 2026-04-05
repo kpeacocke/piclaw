@@ -81,6 +81,18 @@ See `CONTRIBUTING.md` for contribution workflow details.
 	- `.github/workflows/ansible-ci.yml`
 - Weekly scheduled syntax verification workflow:
 	- `.github/workflows/scheduled-verify.yml`
+- PR auto-labeling by changed paths:
+	- `.github/workflows/pr-labeler.yml`
+	- `.github/labeler.yml`
+- Stale issue/PR lifecycle automation:
+	- `.github/workflows/stale.yml`
+- Release draft automation:
+	- `.github/workflows/release-drafter.yml`
+	- `.github/release-drafter.yml`
+- Semantic PR title enforcement (Conventional Commits):
+	- `.github/workflows/semantic-pr.yml`
+- Manual publish of SemVer release from draft:
+	- `.github/workflows/publish-release.yml`
 - Dependabot for `pip` and GitHub Actions updates:
 	- `.github/dependabot.yml`
 - PR template and issue templates:
@@ -98,6 +110,13 @@ See `CONTRIBUTING.md` for contribution workflow details.
 - Support guidance in `.github/SUPPORT.md`
 - Issue template config in `.github/ISSUE_TEMPLATE/config.yml`
 - Release note categories in `.github/release.yml`
+
+## SemVer Release Flow
+
+1. Use Conventional Commit PR titles (for example: `feat: add verify artifact output`, `fix: correct hailo probe check`).
+2. `semantic-pr` workflow validates title format.
+3. `release-drafter` auto-labels and computes next SemVer (`major`/`minor`/`patch`).
+4. Run `publish-release` workflow when ready to publish the drafted release and tag.
 
 ## What Gets Enforced
 
