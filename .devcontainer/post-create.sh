@@ -14,8 +14,9 @@ mkdir -p "${STATE_DIR}"
 
 # Re-run expensive setup only when bootstrap inputs change.
 BOOTSTRAP_HASH="$({
-  printf '%s\n' 'post-create-v5'
+  printf '%s\n' 'post-create-v6'
   cat requirements-dev.txt
+  cat requirements-dev.lock
 } | sha256sum | awk '{print $1}')"
 
 BOOTSTRAP_NEEDED="true"
@@ -31,25 +32,9 @@ fi
 if [[ "${BOOTSTRAP_NEEDED}" == "true" ]]; then
   echo "[devcontainer] Running lightweight workspace bootstrap"
 
-  echo "[devcontainer] Installing Snyk CLI"
-  if ! command -v npm >/dev/null 2>&1; then
-    echo "[devcontainer] ERROR: npm is required but was not found in PATH"
-    exit 1
-  fi
-
-  # Prefer non-root install; retry with sudo for images configured with system-wide npm prefix.
-  if ! npm install -g npm@latest snyk; then
-    if [[ -n "${SUDO}" ]]; then
-      ${SUDO} npm install -g npm@latest snyk
-    else
-      echo "[devcontainer] ERROR: failed to install snyk globally with npm"
-      exit 1
-    fi
-  fi
-
   echo "[devcontainer] Creating workspace venv and installing dev dependencies"
   python3 -m venv .venv
-  .venv/bin/pip install -r requirements-dev.txt
+  .venv/bin/pip install --require-hashes -r requirements-dev.lock
 
   echo "[devcontainer] Installing pre-commit hooks"
   pre-commit install

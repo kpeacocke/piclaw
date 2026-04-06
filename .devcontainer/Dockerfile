@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:dev-3.14-trixie@sha256:de0e677fbf35384da5c723ab101ba8f03af95f1f29d5e4134ecb021dc7e96dd1
+FROM mcr.microsoft.com/devcontainers/python:dev-3.14-trixie
 
 USER root
 
@@ -35,9 +35,9 @@ ENV PATH="/home/vscode/.local/bin:${PATH}"
 
 # Copy only dependency manifests first to maximize Docker layer cache hits.
 COPY --chown=vscode:vscode requirements-dev.txt /tmp/piclaw/requirements-dev.txt
+COPY --chown=vscode:vscode requirements-dev.lock /tmp/piclaw/requirements-dev.lock
 COPY --chown=vscode:vscode collections/requirements.yml /tmp/piclaw/collections-requirements.yml
 
 RUN set -eux; \
-    python -m pip install --upgrade pip; \
-    pip install -r /tmp/piclaw/requirements-dev.txt; \
+  pip install --require-hashes -r /tmp/piclaw/requirements-dev.lock; \
     ansible-galaxy collection install -r /tmp/piclaw/collections-requirements.yml

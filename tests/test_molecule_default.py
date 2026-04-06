@@ -1,3 +1,5 @@
+"""Smoke test for the default Molecule scenario."""
+
 from __future__ import annotations
 
 import shutil
@@ -6,6 +8,8 @@ from pathlib import Path
 
 
 def test_molecule_default_scenario() -> None:
+    """Run the default Molecule scenario and surface stdout/stderr on failure."""
+
     repo_root = Path(__file__).resolve().parents[1]
     molecule = shutil.which("molecule")
 
@@ -15,6 +19,7 @@ def test_molecule_default_scenario() -> None:
         [molecule, "test", "-s", "default"],
         cwd=repo_root,
         capture_output=True,
+        check=False,
         text=True,
     )
 
