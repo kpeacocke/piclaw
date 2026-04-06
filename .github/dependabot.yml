@@ -17,3 +17,8 @@ updates:
       - dependencies
       - dependabot
       - github-actions
+
+  - package-ecosystem: docker
+    directory: /.devcontainer
+    schedule:
+      interval: daily
