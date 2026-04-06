@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:dev-3.14-trixie
+FROM mcr.microsoft.com/devcontainers/python:dev-3.14-trixie@sha256:de0e677fbf35384da5c723ab101ba8f03af95f1f29d5e4134ecb021dc7e96dd1
 
 USER root
 

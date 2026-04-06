@@ -24,3 +24,15 @@ repos:
         files: ^(playbooks/|roles/|inventories/|group_vars/)
         additional_dependencies:
           - ansible-core>=2.20,<2.21
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.16.3
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/jumanjihouse/pre-commit-hooks
+    rev: 3.0.0
+    hooks:
+      - id: shellcheck
+  - repo: https://github.com/pylint-dev/pylint
+    rev: v2.17.2
+    hooks:
+      - id: pylint
