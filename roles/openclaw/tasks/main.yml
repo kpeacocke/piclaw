@@ -1,5 +1,17 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
+- name: Validate claw_flavor contains only safe characters
+  ansible.builtin.assert:
+    that:
+      - claw_flavor is match('^[a-zA-Z0-9_-]+$')
+    fail_msg: "claw_flavor '{{ claw_flavor }}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed."
+
+- name: Validate hailo_model contains only safe characters
+  ansible.builtin.assert:
+    that:
+      - hailo_model is match('^[a-zA-Z0-9_./:@-]+$')
+    fail_msg: "hailo_model '{{ hailo_model }}' contains invalid characters."
+
 - name: Ensure installer parent directory exists
   ansible.builtin.file:
     path: "{{ openclaw_installer_dest | dirname }}"
@@ -11,6 +23,7 @@
   ansible.builtin.git:
     repo: "{{ openclaw_installer_repo }}"
     dest: "{{ openclaw_installer_dest }}"
+    version: "{{ openclaw_installer_version }}"
     update: true
   become: true
 
@@ -33,6 +46,10 @@
     CLAW_FLAVOR: "{{ claw_flavor }}"
     USE_SANITIZER_PROXY_ON_OLLAMA: "{{ (use_sanitizer_proxy | bool) | ternary('true', 'false') }}"
     HAILO_MODEL: "{{ hailo_model }}"
+    OPENCLAW_ADMIN_PASSWORD: "{{ vault_openclaw_admin_password | default('') }}"
+    OPENCLAW_API_TOKEN: "{{ vault_optional_api_token | default('') }}"
+  changed_when: true
+  no_log: true
   become: true
 
 - name: Ensure Hailo Ollama service is active
@@ -58,16 +75,19 @@
   when: not (use_sanitizer_proxy | bool)
   become: true
 
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  become: true
+
 - name: Verify OpenClaw gateway/process is active
-  ansible.builtin.shell: |
-    systemctl is-active openclaw || \
-    systemctl is-active openclaw-gateway || \
-    systemctl is-active claw-gateway
-  args:
-    executable: /bin/bash
-  register: openclaw_service_check
-  changed_when: false
-  failed_when: openclaw_service_check.rc != 0
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
+        or ansible_facts.services.get('openclaw-gateway.service', {}).get('state', 'stopped') == 'running'
+        or ansible_facts.services.get('claw-gateway.service', {}).get('state', 'stopped') == 'running'
+    fail_msg: >-
+      None of openclaw.service, openclaw-gateway.service, or claw-gateway.service are active.
   become: true
 
 - name: Check OpenClaw provider config file exists

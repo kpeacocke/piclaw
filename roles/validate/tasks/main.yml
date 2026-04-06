@@ -1,7 +1,9 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 - name: Validate Hailo PCIe presence
-  ansible.builtin.shell: lspci | grep -i hailo
+  ansible.builtin.shell: |
+    set -o pipefail
+    lspci | grep -i hailo
   args:
     executable: /bin/bash
   register: validate_lspci
@@ -89,16 +91,19 @@
   when: use_sanitizer_proxy | bool
   become: true
 
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  become: true
+
 - name: Verify OpenClaw gateway/process active
-  ansible.builtin.shell: |
-    systemctl is-active openclaw || \
-    systemctl is-active openclaw-gateway || \
-    systemctl is-active claw-gateway
-  args:
-    executable: /bin/bash
-  register: validate_openclaw_service
-  changed_when: false
-  failed_when: validate_openclaw_service.rc != 0
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
+        or ansible_facts.services.get('openclaw-gateway.service', {}).get('state', 'stopped') == 'running'
+        or ansible_facts.services.get('claw-gateway.service', {}).get('state', 'stopped') == 'running'
+    fail_msg: >-
+      None of openclaw.service, openclaw-gateway.service, or claw-gateway.service are active.
   become: true
 
 - name: Functional chat roundtrip validation

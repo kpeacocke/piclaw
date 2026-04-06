@@ -3,12 +3,7 @@ surveys:
   bootstrap:
     name: piclaw-bootstrap-survey
     description: Runtime variables for bootstrap execution
-    questions:
-      - variable: target_limit
-        type: text
-        question: Ansible limit
-        required: false
-        default: pi5
+    questions: []
 
   openclaw:
     name: piclaw-openclaw-survey
@@ -30,15 +25,10 @@ surveys:
 
   verify:
     name: piclaw-verify-survey
-    description: Runtime controls for verification timeout and target
+    description: Runtime controls for verification timeout
     questions:
       - variable: chat_smoke_timeout_seconds
         type: integer
         question: Chat smoke test timeout seconds
         required: true
         default: 45
-      - variable: target_limit
-        type: text
-        question: Ansible limit
-        required: false
-        default: pi5

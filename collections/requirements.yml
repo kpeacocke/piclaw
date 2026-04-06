@@ -1,3 +1,3 @@
 ---
-collections:
-  - name: ansible.posix
+# No external collections required; all modules used are in ansible.builtin (ansible-core).
+collections: []

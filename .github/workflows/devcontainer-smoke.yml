@@ -8,6 +8,7 @@ on:
     paths:
       - .devcontainer/**
       - requirements-dev.txt
+      - requirements-dev.lock
       - collections/requirements.yml
       - .github/workflows/devcontainer-smoke.yml
   push:
@@ -16,6 +17,7 @@ on:
     paths:
       - .devcontainer/**
       - requirements-dev.txt
+      - requirements-dev.lock
       - collections/requirements.yml
       - .github/workflows/devcontainer-smoke.yml
 
@@ -32,10 +34,20 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            auth.docker.io:443
+            files.pythonhosted.org:443
+            ghcr.io:443
+            github.com:443
+            objects.githubusercontent.com:443
+            production.cloudflare.docker.com:443
+            pypi.org:443
+            registry-1.docker.io:443
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -50,5 +62,4 @@ jobs:
             ansible-lint --version | head -n 1
             molecule --version | head -n 1
             pytest --version
-            snyk --version
             sonar-scanner --version | head -n 1

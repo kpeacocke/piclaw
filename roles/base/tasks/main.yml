@@ -9,6 +9,7 @@
 - name: Full upgrade OS packages
   ansible.builtin.apt:
     upgrade: full
+  when: run_full_upgrade | bool
   become: true
 
 - name: Install baseline packages
@@ -46,7 +47,9 @@
   become: true
 
 - name: Verify Hailo PCIe device is detected
-  ansible.builtin.shell: lspci | grep -i hailo
+  ansible.builtin.shell: |
+    set -o pipefail
+    lspci | grep -i hailo
   args:
     executable: /bin/bash
   register: hailo_lspci

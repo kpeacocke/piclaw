@@ -1,10 +1,19 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
-- name: Install Hailo stack for AI HAT+ 2
+- name: Install Hailo stack for AI HAT+ 2 (latest)
   ansible.builtin.apt:
     name: hailo-h10-all
     state: present
   register: hailo_stack_install
+  when: hailo_h10_all_version | length == 0
+  become: true
+
+- name: Install Hailo stack for AI HAT+ 2 (pinned version)
+  ansible.builtin.apt:
+    name: "hailo-h10-all={{ hailo_h10_all_version }}"
+    state: present
+  register: hailo_stack_install_pinned
+  when: hailo_h10_all_version | length > 0
   become: true
 
 - name: Reboot after Hailo package install
@@ -12,7 +21,9 @@
     msg: Reboot initiated by Ansible after Hailo stack install.
     reboot_timeout: 900
     post_reboot_delay: 10
-  when: hailo_stack_install.changed
+  when: >
+    (hailo_stack_install is not skipped and hailo_stack_install.changed) or
+    (hailo_stack_install_pinned is not skipped and hailo_stack_install_pinned.changed)
   become: true
 
 - name: Verify Hailo device node exists
@@ -33,7 +44,9 @@
   failed_when: hailort_identify.rc != 0
 
 - name: Verify dmesg contains Hailo probe lines
-  ansible.builtin.shell: dmesg | grep -i hailo
+  ansible.builtin.shell: |
+    set -o pipefail
+    dmesg | grep -i hailo
   args:
     executable: /bin/bash
   register: hailo_dmesg

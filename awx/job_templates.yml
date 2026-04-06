@@ -6,6 +6,7 @@ job_templates:
     project: piclaw
     playbook: playbooks/bootstrap.yml
     job_type: run
+    limit: pi5
     credentials:
       - pi5-ssh
       - pi5-vault
@@ -19,6 +20,7 @@ job_templates:
     project: piclaw
     playbook: playbooks/openclaw.yml
     job_type: run
+    limit: pi5
     credentials:
       - pi5-ssh
       - pi5-vault
@@ -32,6 +34,7 @@ job_templates:
     project: piclaw
     playbook: playbooks/verify.yml
     job_type: run
+    limit: pi5
     credentials:
       - pi5-ssh
       - pi5-vault

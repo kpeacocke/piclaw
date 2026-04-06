@@ -27,6 +27,16 @@
    ansible-playbook --syntax-check playbooks/verify.yml
    ```
 
+## Updating the dependency lockfile
+
+CI installs from `requirements-dev.lock` (hash-pinned). If you change `requirements-dev.txt`, regenerate the lockfile:
+
+```bash
+pip-compile --generate-hashes --allow-unsafe --output-file=requirements-dev.lock requirements-dev.txt
+```
+
+Commit both files together in the same PR.
+
 ## Branching and pull requests
 
 - Create focused branches with one concern per PR.
@@ -37,3 +47,4 @@
 
 - Do not commit secrets, hostnames, or private network details beyond placeholders.
 - Keep inventory host details environment-specific in your own deployment fork or private vars.
+- Pin `openclaw_installer_version` in `group_vars/pi5.yml` to a specific commit SHA before running against hardware.

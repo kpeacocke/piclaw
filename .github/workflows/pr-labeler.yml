@@ -15,10 +15,13 @@ jobs:
   label:
     runs-on: ubuntu-latest
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
 
       - name: Label PR based on changed files
         uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1

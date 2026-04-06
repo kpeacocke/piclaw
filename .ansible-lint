@@ -9,12 +9,9 @@ exclude_paths:
   - molecule/
   - .pre-commit-config.yaml
 skip_list:
+  # Variables are scoped to a single-node group; role-level prefixing adds no value here.
   - var-naming[no-role-prefix]
-  - risky-shell-pipe
+  # Inline reboots are intentional — reboot ordering for hardware config requires explicit control.
   - no-handler
-  - latest[git]
-  - no-changed-when
-  - command-instead-of-module
-  - yaml[document-start]
 warn_list:
   - fqcn-builtins

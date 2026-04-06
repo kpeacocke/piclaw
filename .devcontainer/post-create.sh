@@ -53,5 +53,4 @@ ansible --version | head -n 1
 ansible-lint --version | head -n 1
 molecule --version | head -n 1
 pytest --version
-snyk --version
 sonar-scanner --version | head -n 1
