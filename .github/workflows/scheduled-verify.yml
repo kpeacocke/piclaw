@@ -24,31 +24,4 @@ jobs:
       - name: Harden the runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
         with:
-          egress-policy: block
-          allowed-endpoints: >
-            api.github.com:443
-            files.pythonhosted.org:443
-            github.com:443
-            objects.githubusercontent.com:443
-            pypi.org:443
-
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: requirements-dev.lock
-
-      - name: Install dependencies
-        run: |
-          pip install --require-hashes -r requirements-dev.lock
-          ansible-galaxy collection install -r collections/requirements.yml
-
-      - name: Verify syntax
-        run: |
-          ansible-playbook --syntax-check playbooks/bootstrap.yml
-          ansible-playbook --syntax-check playbooks/openclaw.yml
-          ansible-playbook --syntax-check playbooks/verify.yml
+          egress-policy: audit

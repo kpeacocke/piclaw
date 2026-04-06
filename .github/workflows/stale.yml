@@ -19,19 +19,4 @@ jobs:
       - name: Harden the runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
         with:
-          egress-policy: block
-          allowed-endpoints: >
-            api.github.com:443
-            github.com:443
-
-      - name: Mark and close stale issues/PRs
-        uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10.2.0
-        with:
-          days-before-stale: 45
-          days-before-close: 14
-          stale-issue-label: stale
-          stale-pr-label: stale
-          stale-issue-message: "This issue is stale due to inactivity. It will close in 14 days unless updated."
-          stale-pr-message: "This PR is stale due to inactivity. It will close in 14 days unless updated."
-          exempt-issue-labels: security,pinned
-          exempt-pr-labels: security,pinned
+          egress-policy: audit
