@@ -45,5 +45,6 @@
         "sonarqube",
         "snyk"
     ],
-    "snyk.advanced.autoSelectOrganization": true
+    "snyk.advanced.autoSelectOrganization": true,
+    "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e"
 }

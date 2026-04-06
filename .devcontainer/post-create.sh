@@ -14,7 +14,8 @@ mkdir -p "${STATE_DIR}"
 
 # Re-run expensive setup only when bootstrap inputs change.
 BOOTSTRAP_HASH="$({
-  printf '%s\n' 'post-create-v4'
+  printf '%s\n' 'post-create-v5'
+  cat requirements-dev.txt
 } | sha256sum | awk '{print $1}')"
 
 BOOTSTRAP_NEEDED="true"
@@ -45,6 +46,10 @@ if [[ "${BOOTSTRAP_NEEDED}" == "true" ]]; then
       exit 1
     fi
   fi
+
+  echo "[devcontainer] Creating workspace venv and installing dev dependencies"
+  python3 -m venv .venv
+  .venv/bin/pip install -r requirements-dev.txt
 
   echo "[devcontainer] Installing pre-commit hooks"
   pre-commit install
