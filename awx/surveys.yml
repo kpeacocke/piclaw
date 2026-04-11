@@ -7,7 +7,7 @@ surveys:
 
   openclaw:
     name: piclaw-openclaw-survey
-    description: Runtime variables for model and provider
+    description: Runtime variables for model, provider, and secrets
     questions:
       - variable: hailo_model
         type: text
@@ -22,6 +22,15 @@ surveys:
           - "true"
           - "false"
         default: "true"
+      - variable: vault_openclaw_admin_password
+        type: password
+        question: OpenClaw admin password
+        required: true
+      - variable: vault_optional_api_token
+        type: password
+        question: Optional upstream API token
+        required: false
+        default: ""
 
   verify:
     name: piclaw-verify-survey

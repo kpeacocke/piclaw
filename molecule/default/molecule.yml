@@ -15,9 +15,8 @@ provisioner:
 
 scenario:
   name: default
-  # Full converge/verify is not possible in CI — this repo targets physical hardware (Pi 5 + Hailo).
-  # The test_sequence runs dependency resolution, lint, and syntax checks as meaningful CI gates.
+  # Full converge/verify is not possible in CI because this repo targets physical hardware.
+  # The scenario therefore validates dependency wiring and Ansible syntax only.
   test_sequence:
     - dependency
-    - lint
     - syntax

@@ -9,7 +9,6 @@ job_templates:
     limit: pi5
     credentials:
       - pi5-ssh
-      - pi5-vault
     ask_variables_on_launch: true
     survey_enabled: true
     survey_spec_ref: awx/surveys.yml#/surveys/bootstrap
@@ -23,7 +22,6 @@ job_templates:
     limit: pi5
     credentials:
       - pi5-ssh
-      - pi5-vault
     ask_variables_on_launch: true
     survey_enabled: true
     survey_spec_ref: awx/surveys.yml#/surveys/openclaw
@@ -37,7 +35,6 @@ job_templates:
     limit: pi5
     credentials:
       - pi5-ssh
-      - pi5-vault
     ask_variables_on_launch: true
     survey_enabled: true
     survey_spec_ref: awx/surveys.yml#/surveys/verify
