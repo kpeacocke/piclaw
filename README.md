@@ -87,6 +87,42 @@ molecule test -s default
 
 See `CONTRIBUTING.md` for contribution workflow details.
 
+## AWX Setup
+
+Job templates and survey definitions are in `awx/job_templates.yml` and `awx/surveys.yml` as reference specs. Create them in AWX manually or via the API.
+
+Secrets (`vault_openclaw_admin_password`, `vault_optional_api_token`) are injected at runtime via AWX survey password fields — do **not** commit a vault file.
+
+### Receptor Mesh Topology
+
+AWX uses Receptor to dispatch work to execution nodes. The mesh **must** be a direct connection:
+
+```
+awx-task ↔ awx-receptor ↔ receptor-execution
+```
+
+Do **not** relay through a hop node if the hop runs a different Receptor version than the execution node. A version mismatch between the hop and the execution node causes work units to silently fail (jobs complete in ~12 s with zero events and no stdout).
+
+Both `awx-receptor` and `receptor-execution` must run the same Receptor version (e.g. both from `awx-ee:24.6.1`).
+
+In `docker-compose.yml`, remove any `tcp-peer: address: receptor-hop:8888` entries from the `awx-task` and `awx-receptor` `RECEPTOR_CONFIG` blocks, and point `receptor-execution`'s peer directly at `awx-receptor:8888`.
+
+### Required Runtime Paths
+
+AWX's periodic `purge_old_stdout_files` task requires `/var/lib/awx/job_status/` to exist inside `awx-task`. If the directory is absent the task crashes on every cycle (visible in `docker logs awx-task`).
+
+Add to the `awx-task` entrypoint:
+
+```bash
+mkdir -p /var/lib/awx/job_status
+```
+
+### Execution Order (via AWX)
+
+Templates: `piclaw-bootstrap` → `piclaw-openclaw` → `piclaw-verify`
+
+`piclaw-openclaw` prompts for survey answers (`vault_openclaw_admin_password`, `vault_optional_api_token`).
+
 ## GitHub Automation Included
 
 - CI workflow for lint + syntax checks:
