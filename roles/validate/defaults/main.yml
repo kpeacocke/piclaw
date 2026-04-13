@@ -1,0 +1,13 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+use_sanitizer_proxy: true
+hailo_model: qwen2:1.5b
+hailo_bind_host: 127.0.0.1
+hailo_port: 8000
+proxy_port: 8081
+openclaw_provider_base_url: >-
+  {{ 'http://127.0.0.1:' ~ proxy_port ~ '/v1' if use_sanitizer_proxy else 'http://127.0.0.1:' ~ hailo_port ~ '/v1' }}
+openclaw_config_path: /etc/openclaw/config.yml
+hailo_ollama_service_name: hailo-ollama
+hailo_proxy_service_name: hailo-sanitize-proxy
+chat_smoke_timeout_seconds: 45

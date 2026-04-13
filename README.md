@@ -33,21 +33,17 @@ This repository enforces a known-good state for Raspberry Pi 5 + AI HAT+ 2 using
 
 ## Configure Variables
 
-Edit `group_vars/pi5.yml`:
+Repository defaults live in each role's `defaults/main.yml`.
+
+Use `group_vars/pi5.yml` only for local inventory overrides such as:
 
 - `pi_user`
-- `use_sanitizer_proxy`
-- `claw_flavor`
 - `hailo_model`
-- `hailo_bind_host`
-- `hailo_port`
-- `proxy_port`
-- `openclaw_provider_base_url`
-- `openclaw_config_path` (if your install path differs)
+- `use_sanitizer_proxy`
 
 Edit inventory host target in `inventories/prod/hosts.yml`.
 
-For encrypted secrets, copy `group_vars/pi5.vault.yml.example` to `group_vars/pi5.vault.yml` and encrypt it:
+For local, non-AWX encrypted secrets, copy `group_vars/pi5.vault.yml.example` to `group_vars/pi5.vault.yml` and encrypt it:
 
 ```bash
 cp group_vars/pi5.vault.yml.example group_vars/pi5.vault.yml
@@ -92,6 +88,14 @@ See `CONTRIBUTING.md` for contribution workflow details.
 Job templates and survey definitions are in `awx/job_templates.yml` and `awx/surveys.yml` as reference specs. Create them in AWX manually or via the API.
 
 Secrets (`vault_openclaw_admin_password`, `vault_optional_api_token`) are injected at runtime via AWX survey password fields — do **not** commit a vault file.
+
+For AWX variable management:
+
+- Keep repository defaults in git (role defaults).
+- Put environment-specific overrides in AWX inventory/group/host vars.
+- Put secrets in AWX surveys or credentials.
+
+Do not copy the full contents of `group_vars/pi5.yml` into Job Template extra vars; that creates unnecessary high-precedence drift.
 
 ### Receptor Mesh Topology
 
