@@ -7,6 +7,7 @@ job_templates:
     playbook: playbooks/bootstrap.yml
     job_type: run
     limit: pi5
+    execution_environment: "AWX EE (24.6.1)"
     credentials:
       - pi5-ssh
     ask_variables_on_launch: true
@@ -20,6 +21,7 @@ job_templates:
     playbook: playbooks/openclaw.yml
     job_type: run
     limit: pi5
+    execution_environment: "AWX EE (24.6.1)"
     credentials:
       - pi5-ssh
     ask_variables_on_launch: true
@@ -33,6 +35,7 @@ job_templates:
     playbook: playbooks/verify.yml
     job_type: run
     limit: pi5
+    execution_environment: "AWX EE (24.6.1)"
     credentials:
       - pi5-ssh
     ask_variables_on_launch: true
