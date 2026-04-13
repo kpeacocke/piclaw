@@ -1,17 +1,15 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
-- name: Install Hailo GenAI model-zoo package (latest)
-  ansible.builtin.apt:
-    name: "{{ hailo_genai_package }}"
-    state: present
-  when: hailo_genai_package_version | length == 0
+- name: Download Hailo GenAI model-zoo Debian package
+  ansible.builtin.get_url:
+    url: "{{ hailo_genai_deb_url }}"
+    dest: "{{ hailo_genai_deb_file }}"
+    mode: "0644"
   become: true
 
-- name: Install Hailo GenAI model-zoo package (pinned version)
+- name: Install Hailo GenAI model-zoo from Debian package
   ansible.builtin.apt:
-    name: "{{ hailo_genai_package }}={{ hailo_genai_package_version }}"
-    state: present
-  when: hailo_genai_package_version | length > 0
+    deb: "{{ hailo_genai_deb_file }}"
   become: true
 
 - name: Ensure Hailo Ollama service is enabled and started
