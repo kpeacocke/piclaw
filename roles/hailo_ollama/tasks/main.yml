@@ -12,6 +12,31 @@
     deb: "{{ hailo_genai_deb_file }}"
   become: true
 
+- name: Create hailo-ollama systemd service unit file
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Hailo Ollama Model Server
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ pi_user }}
+      ExecStart=/usr/local/bin/hailo-ollama
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/hailo-ollama.service
+  become: true
+
+- name: Reload systemd daemon to recognize new service
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
 - name: Ensure Hailo Ollama service is enabled and started
   ansible.builtin.systemd:
     name: "{{ hailo_ollama_service_name }}"

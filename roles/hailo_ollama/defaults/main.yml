@@ -1,5 +1,6 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
+pi_user: pi
 hailo_genai_deb_url: https://dev-public.hailo.ai/2025_12/Hailo10/hailo_gen_ai_model_zoo_5.1.1_arm64.deb
 hailo_genai_deb_file: /tmp/hailo_gen_ai_model_zoo_5.1.1_arm64.deb
 hailo_model: qwen2:1.5b
