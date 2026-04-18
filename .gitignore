@@ -22,6 +22,10 @@ launch_spec.json
 survey_spec.json
 updated_survey_spec.json
 final_survey_spec.json
+poll_awx.py
+check_stdout.py
+check_stdout_v2.py
+check_stdout_v3.py
 
 # OS/editor
 .DS_Store
