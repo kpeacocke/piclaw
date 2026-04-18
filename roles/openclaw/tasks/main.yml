@@ -131,6 +131,7 @@
 - name: Install OpenClaw CLI globally with npm
   ansible.builtin.command: npm install -g {{ openclaw_npm_package }}
   when: openclaw_cli_path.rc != 0
+  changed_when: true
   become: true
 
 - name: Resolve OpenClaw CLI path
@@ -161,7 +162,7 @@
     dest: "{{ openclaw_user_config_path }}"
     owner: "{{ openclaw_user }}"
     group: "{{ openclaw_user }}"
-    mode: "0644"
+    mode: "0600"
     content: |
       {
         "gateway": {
@@ -207,6 +208,7 @@
           "allow": ["nextcloud-talk"]
         }
       }
+  no_log: true
   become: true
 
 - name: Read OpenClaw user configuration
@@ -243,6 +245,7 @@
           "{{ openclaw_provider_name }}": "{{ openclaw_provider_name }}:local"
         }
       }
+  no_log: true
   become: true
 
 - name: Ensure system OpenClaw config directory exists
@@ -255,7 +258,7 @@
 - name: Write system OpenClaw provider config
   ansible.builtin.copy:
     dest: "{{ openclaw_config_path }}"
-    mode: "0644"
+    mode: "0600"
     content: |
       provider:
         name: {{ openclaw_provider_name }}
@@ -263,6 +266,7 @@
         api: {{ openclaw_provider_api }}
         model: {{ openclaw_selected_model }}
         api_key: {{ openclaw_provider_api_key }}
+  no_log: true
   become: true
 
 - name: Install OpenClaw systemd unit

@@ -106,6 +106,12 @@ For AWX variable management:
 
 Do not copy the full contents of `group_vars/pi5.yml` into Job Template extra vars; that creates unnecessary high-precedence drift.
 
+### Galaxy Collection Sync Requirement
+
+To ensure project updates install collections from `collections/requirements.yml` (including `community.docker`), attach at least one Ansible Galaxy/Automation Hub credential to the AWX organization used by this project.
+
+Without an organization Galaxy credential, AWX may skip collection sync during project updates and jobs can fail with module resolution errors such as `couldn't resolve module/action 'community.docker.docker_image'`.
+
 ### Receptor Mesh Topology
 
 AWX uses Receptor to dispatch work to execution nodes. The mesh **must** be a direct connection:
