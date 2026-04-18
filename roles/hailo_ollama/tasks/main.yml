@@ -4,6 +4,7 @@
   ansible.builtin.get_url:
     url: "{{ hailo_genai_deb_url }}"
     dest: "{{ hailo_genai_deb_file }}"
+    checksum: "sha256:{{ hailo_genai_deb_sha256 }}"
     mode: "0644"
   become: true
 
@@ -44,11 +45,7 @@
       [Install]
       WantedBy=multi-user.target
     dest: /etc/systemd/system/hailo-ollama.service
-  become: true
-
-- name: Reload systemd daemon to recognize new service
-  ansible.builtin.systemd:
-    daemon_reload: true
+  notify: Reload systemd daemon
   become: true
 
 - name: Ensure Hailo Ollama service is enabled and started
@@ -56,6 +53,7 @@
     name: "{{ hailo_ollama_service_name }}"
     enabled: true
     state: started
+  changed_when: false
   become: true
 
 - name: Wait for Hailo Ollama API readiness

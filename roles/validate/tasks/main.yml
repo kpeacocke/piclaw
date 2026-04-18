@@ -90,24 +90,24 @@
       - (validate_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
     fail_msg: OpenClaw provider base URL mismatch; expected {{ openclaw_provider_base_url }}.
 
-- name: Verify Hailo Ollama service active
-  ansible.builtin.systemd:
-    name: "{{ hailo_ollama_service_name }}"
-    enabled: true
-    state: started
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  become: true
+
+- name: Assert Hailo Ollama service is active
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services.get(hailo_ollama_service_name ~ '.service', {}).get('state', 'stopped') == 'running'
+    fail_msg: "{{ hailo_ollama_service_name }}.service is not running."
   when: openclaw_use_local_backend | bool
   become: true
 
-- name: Verify proxy service active when enabled
-  ansible.builtin.systemd:
-    name: "{{ hailo_proxy_service_name }}"
-    enabled: true
-    state: started
+- name: Assert proxy service is active when enabled
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services.get(hailo_proxy_service_name ~ '.service', {}).get('state', 'stopped') == 'running'
+    fail_msg: "{{ hailo_proxy_service_name }}.service is not running while use_sanitizer_proxy=true."
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
-  become: true
-
-- name: Gather service facts
-  ansible.builtin.service_facts:
   become: true
 
 - name: Verify OpenClaw gateway/process active

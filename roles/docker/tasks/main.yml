@@ -3,13 +3,7 @@
 
 # --- 3.3 Install Docker ---------------------------------------------------
 
-- name: Gather service facts to detect existing Docker installation
-  ansible.builtin.service_facts:
-  become: true
-
-- name: Install Docker (skipped when docker.service is already active)
-  when: >-
-    ansible_facts.services.get('docker.service', {}).get('state', '') != 'running'
+- name: Install and configure Docker
   become: true
   block:
     - name: Remove legacy Docker packages

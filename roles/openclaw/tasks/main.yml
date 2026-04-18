@@ -99,18 +99,13 @@
       [Install]
       WantedBy=multi-user.target
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+  notify: Reload systemd daemon
   become: true
 
 - name: Check whether managed sanitizer proxy service unit exists
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ hailo_proxy_service_name }}.service"
   register: openclaw_proxy_unit
-
-- name: Reload systemd daemon for sanitizer proxy
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
-  become: true
 
 - name: Ensure sanitizer proxy service is active when enabled
   ansible.builtin.systemd:
@@ -299,11 +294,7 @@
 
       [Install]
       WantedBy=multi-user.target
-  become: true
-
-- name: Reload systemd daemon for OpenClaw service
-  ansible.builtin.systemd:
-    daemon_reload: true
+  notify: Reload systemd daemon
   become: true
 
 - name: Ensure OpenClaw service is enabled and started

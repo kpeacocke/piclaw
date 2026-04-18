@@ -24,7 +24,7 @@ docker_packages:
 
 # Set to true to deploy the Open WebUI container (section 3.4 — optional).
 install_open_webui: false
-open_webui_image: ghcr.io/open-webui/open-webui:main
+open_webui_image: ghcr.io/open-webui/open-webui:v0.5.10
 open_webui_container_name: open-webui
 open_webui_data_volume: open-webui
 open_webui_port: 8080
