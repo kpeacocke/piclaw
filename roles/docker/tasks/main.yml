@@ -82,34 +82,6 @@
 
 # --- 3.4 Open WebUI (optional) -------------------------------------------
 
-- name: Pull Open WebUI image
-  community.docker.docker_image:
-    name: "{{ open_webui_image }}"
-    source: pull
-  when: install_open_webui | bool
-  become: true
-
-- name: Deploy Open WebUI container
-  community.docker.docker_container:
-    name: "{{ open_webui_container_name }}"
-    image: "{{ open_webui_image }}"
-    state: started
-    restart_policy: always
-    network_mode: host
-    env:
-      OLLAMA_BASE_URL: "{{ hailo_ollama_base_url }}"
-    volumes:
-      - "{{ open_webui_data_volume }}:/app/backend/data"
-  when: install_open_webui | bool
-  become: true
-
-- name: Wait for Open WebUI to become ready
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ open_webui_port }}"
-    method: GET
-    status_code: 200
-  register: open_webui_ready
-  retries: "{{ open_webui_ready_retries }}"
-  delay: "{{ open_webui_ready_delay }}"
-  until: open_webui_ready.status == 200
+- name: Manage Open WebUI when enabled
+  ansible.builtin.include_tasks: open_webui.yml
   when: install_open_webui | bool

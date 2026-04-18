@@ -9,10 +9,29 @@
 
     "python.analysis.typeCheckingMode": "strict",
     "python.analysis.diagnosticMode": "workspace",
+    "files.exclude": {
+        "**/.venv": true
+    },
+    "search.exclude": {
+        "**/.venv": true
+    },
+    "files.watcherExclude": {
+        "**/.venv/**": true,
+        "**/__pycache__/**": true,
+        "**/node_modules/**": true
+    },
     "python.analysis.exclude": [
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/node_modules/**",
+        "**/.*",
         "hailo-sanitize-proxy.py"
     ],
     "python.analysis.ignore": [
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/node_modules/**",
+        "**/.*",
         "hailo-sanitize-proxy.py"
     ],
 
