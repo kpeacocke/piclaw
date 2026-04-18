@@ -14,7 +14,7 @@ openclaw_external_provider_name: custom
 openclaw_external_provider_base_url: ""
 openclaw_external_provider_api: openai-completions
 openclaw_external_provider_model: gpt-4.1-mini
-openclaw_external_provider_api_key: ""
+openclaw_external_provider_api_key_env: OPENCLAW_EXTERNAL_PROVIDER_API_KEY
 
 # Shared profile-derived values
 openclaw_use_local_backend: "{{ openclaw_profile == 'local-safe' }}"
@@ -34,8 +34,12 @@ openclaw_provider_base_url: >-
       else openclaw_external_provider_base_url
     )
   }}
-openclaw_provider_api_key: >-
-  {{ 'hailo-local' if openclaw_use_local_backend | bool else openclaw_external_provider_api_key }}
+openclaw_provider_api_key_ref: >-
+  {{
+    'hailo-local'
+    if openclaw_use_local_backend | bool
+    else ('${' ~ openclaw_external_provider_api_key_env ~ '}')
+  }}
 
 openclaw_config_path: /etc/openclaw/config.yml
 openclaw_user: "{{ pi_user | default(ansible_user | default('pi')) }}"

@@ -50,11 +50,11 @@ surveys:
         question: External provider model (used by external-power)
         required: false
         default: gpt-4.1-mini
-      - variable: openclaw_external_provider_api_key
-        type: password
-        question: External provider API key (used by external-power)
+      - variable: openclaw_external_provider_api_key_env
+        type: text
+        question: External provider API key env var name (used by external-power)
         required: false
-        default: ""
+        default: OPENCLAW_EXTERNAL_PROVIDER_API_KEY
 
   verify:
     name: piclaw-verify-survey

@@ -37,6 +37,14 @@
     fail_msg: "openclaw_external_provider_base_url must be set when openclaw_profile is external-power."
   when: not (openclaw_use_local_backend | bool)
 
+- name: Validate external provider API key env var name when external profile is selected
+  ansible.builtin.assert:
+    that:
+      - openclaw_external_provider_api_key_env is match('^[A-Z_][A-Z0-9_]*$')
+    fail_msg: >-
+      openclaw_external_provider_api_key_env must be a valid environment variable name.
+  when: not (openclaw_use_local_backend | bool)
+
 - name: Ensure OpenClaw prerequisites are installed
   ansible.builtin.apt:
     name:
@@ -172,7 +180,7 @@
           "providers": {
             "{{ openclaw_provider_name }}": {
               "baseUrl": "{{ openclaw_provider_base_url }}",
-              "apiKey": "{{ openclaw_provider_api_key }}",
+              "apiKey": "{{ openclaw_provider_api_key_ref }}",
               "api": "{{ openclaw_provider_api }}",
               "models": [
                 {
@@ -239,7 +247,7 @@
         "{{ openclaw_provider_name }}:local": {
           "type": "token",
           "provider": "{{ openclaw_provider_name }}",
-          "token": "{{ openclaw_provider_api_key }}"
+          "token": "{{ openclaw_provider_api_key_ref }}"
         },
         "lastGood": {
           "{{ openclaw_provider_name }}": "{{ openclaw_provider_name }}:local"
@@ -265,7 +273,7 @@
         base_url: {{ openclaw_provider_base_url }}
         api: {{ openclaw_provider_api }}
         model: {{ openclaw_selected_model }}
-        api_key: {{ openclaw_provider_api_key }}
+        api_key: {{ openclaw_provider_api_key_ref }}
   no_log: true
   become: true
 
@@ -284,6 +292,7 @@
       User={{ openclaw_user }}
       Group={{ openclaw_user }}
       Environment=HOME={{ openclaw_user_home }}
+      PassEnvironment={{ openclaw_external_provider_api_key_env }}
       ExecStart={{ openclaw_cli_path_resolved.stdout }} gateway --port {{ openclaw_gateway_port }} --verbose
       Restart=on-failure
       RestartSec=5

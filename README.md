@@ -48,7 +48,9 @@ For `external-power`, set these variables in AWX inventory/group/host vars or su
 - `openclaw_external_provider_base_url`
 - `openclaw_external_provider_api`
 - `openclaw_external_provider_model`
-- `openclaw_external_provider_api_key` (secret)
+- `openclaw_external_provider_api_key_env` (env var name, default `OPENCLAW_EXTERNAL_PROVIDER_API_KEY`)
+
+For `external-power`, provide the actual API key to the OpenClaw service runtime environment (for example through your node/host secret injection workflow) under the variable name in `openclaw_external_provider_api_key_env`.
 
 Edit inventory host target in `inventories/prod/hosts.yml`.
 
