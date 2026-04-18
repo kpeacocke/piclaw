@@ -12,6 +12,17 @@
     deb: "{{ hailo_genai_deb_file }}"
   become: true
 
+- name: Resolve hailo-ollama binary path
+  ansible.builtin.command: command -v hailo-ollama
+  register: hailo_ollama_binary_resolved
+  changed_when: false
+
+- name: Assert hailo-ollama binary is available
+  ansible.builtin.assert:
+    that:
+      - hailo_ollama_binary_resolved.stdout | length > 0
+    fail_msg: hailo-ollama binary was not found on PATH after package installation.
+
 - name: Create hailo-ollama systemd service unit file
   ansible.builtin.copy:
     content: |
@@ -23,7 +34,9 @@
       [Service]
       Type=simple
       User={{ pi_user }}
-      ExecStart=/usr/local/bin/hailo-ollama
+      Environment=HOME=/home/{{ pi_user }}
+      Environment=OLLAMA_HOST={{ hailo_bind_host }}:{{ hailo_port }}
+      ExecStart={{ hailo_ollama_binary_resolved.stdout }}
       Restart=on-failure
       RestartSec=5
 

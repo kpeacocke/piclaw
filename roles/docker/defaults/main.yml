@@ -1,0 +1,33 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+pi_user: "{{ ansible_user | default('pi') }}"
+# Users to add to the docker group.
+docker_users:
+  - "{{ pi_user }}"
+
+# Docker packages to remove before installing (legacy / conflicting packages).
+docker_legacy_packages:
+  - docker.io
+  - docker-compose
+  - docker-doc
+  - podman-docker
+  - containerd
+  - runc
+
+# Docker CE packages to install.
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Set to true to deploy the Open WebUI container (section 3.4 — optional).
+install_open_webui: false
+open_webui_image: ghcr.io/open-webui/open-webui:main
+open_webui_container_name: open-webui
+open_webui_data_volume: open-webui
+open_webui_port: 8080
+hailo_ollama_base_url: http://127.0.0.1:8000
+open_webui_ready_retries: 24
+open_webui_ready_delay: 5

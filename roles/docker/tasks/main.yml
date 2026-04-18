@@ -1,0 +1,121 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+
+# --- 3.3 Install Docker ---------------------------------------------------
+
+- name: Gather service facts to detect existing Docker installation
+  ansible.builtin.service_facts:
+  become: true
+
+- name: Install Docker (skipped when docker.service is already active)
+  when: >-
+    ansible_facts.services.get('docker.service', {}).get('state', '') != 'running'
+  become: true
+  block:
+    - name: Remove legacy Docker packages
+      ansible.builtin.apt:
+        name: "{{ docker_legacy_packages }}"
+        state: absent
+        purge: true
+
+    - name: Install Docker apt prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: true
+
+    - name: Create /etc/apt/keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+        force: false
+
+    - name: Add Docker apt repository (DEB822 format)
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: deb
+        uris: https://download.docker.com/linux/debian
+        suites: "{{ ansible_distribution_release }}"
+        components: stable
+        signed_by: /etc/apt/keyrings/docker.asc
+        state: present
+      register: docker_repo
+
+    - name: Update apt cache after adding Docker repository
+      ansible.builtin.apt:
+        update_cache: true
+      when: docker_repo.changed
+
+    - name: Install Docker CE packages
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+
+- name: Ensure Docker service is enabled and started
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  become: true
+
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+  become: true
+
+- name: Add configured users to docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+  become: true
+
+- name: Verify Docker is operational
+  ansible.builtin.command: docker run --rm hello-world
+  changed_when: false
+  become: true
+
+# --- 3.4 Open WebUI (optional) -------------------------------------------
+
+- name: Pull Open WebUI image
+  community.docker.docker_image:
+    name: "{{ open_webui_image }}"
+    source: pull
+  when: install_open_webui | bool
+  become: true
+
+- name: Deploy Open WebUI container
+  community.docker.docker_container:
+    name: "{{ open_webui_container_name }}"
+    image: "{{ open_webui_image }}"
+    state: started
+    restart_policy: always
+    network_mode: host
+    env:
+      OLLAMA_BASE_URL: "{{ hailo_ollama_base_url }}"
+    volumes:
+      - "{{ open_webui_data_volume }}:/app/backend/data"
+  when: install_open_webui | bool
+  become: true
+
+- name: Wait for Open WebUI to become ready
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ open_webui_port }}"
+    method: GET
+    status_code: 200
+  register: open_webui_ready
+  retries: "{{ open_webui_ready_retries }}"
+  delay: "{{ open_webui_ready_delay }}"
+  until: open_webui_ready.status == 200
+  when: install_open_webui | bool

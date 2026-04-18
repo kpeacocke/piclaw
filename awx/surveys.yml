@@ -7,8 +7,16 @@ surveys:
 
   openclaw:
     name: piclaw-openclaw-survey
-    description: Runtime variables for model, provider, and secrets
+    description: Runtime variables for profile, model, and provider routing
     questions:
+      - variable: openclaw_profile
+        type: multiplechoice
+        question: OpenClaw profile
+        required: true
+        choices:
+          - local-safe
+          - external-power
+        default: local-safe
       - variable: hailo_model
         type: text
         question: Hailo model tag
@@ -22,13 +30,29 @@ surveys:
           - "true"
           - "false"
         default: "true"
-      - variable: vault_openclaw_admin_password
+      - variable: openclaw_external_provider_name
+        type: text
+        question: External provider name (used by external-power)
+        required: false
+        default: custom
+      - variable: openclaw_external_provider_base_url
+        type: text
+        question: External provider base URL (used by external-power)
+        required: false
+        default: ""
+      - variable: openclaw_external_provider_api
+        type: text
+        question: External provider API type (used by external-power)
+        required: false
+        default: openai-completions
+      - variable: openclaw_external_provider_model
+        type: text
+        question: External provider model (used by external-power)
+        required: false
+        default: gpt-4.1-mini
+      - variable: openclaw_external_provider_api_key
         type: password
-        question: OpenClaw admin password
-        required: true
-      - variable: vault_optional_api_token
-        type: password
-        question: Optional upstream API token
+        question: External provider API key (used by external-power)
         required: false
         default: ""
 

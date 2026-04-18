@@ -38,8 +38,17 @@ Repository defaults live in each role's `defaults/main.yml`.
 Use `group_vars/pi5.yml` only for local inventory overrides such as:
 
 - `pi_user`
+- `openclaw_profile` (`local-safe` or `external-power`)
 - `hailo_model`
 - `use_sanitizer_proxy`
+
+For `external-power`, set these variables in AWX inventory/group/host vars or survey answers:
+
+- `openclaw_external_provider_name`
+- `openclaw_external_provider_base_url`
+- `openclaw_external_provider_api`
+- `openclaw_external_provider_model`
+- `openclaw_external_provider_api_key` (secret)
 
 Edit inventory host target in `inventories/prod/hosts.yml`.
 
@@ -87,7 +96,7 @@ See `CONTRIBUTING.md` for contribution workflow details.
 
 Job templates and survey definitions are in `awx/job_templates.yml` and `awx/surveys.yml` as reference specs. Create them in AWX manually or via the API.
 
-Secrets (`vault_openclaw_admin_password`, `vault_optional_api_token`) are injected at runtime via AWX survey password fields — do **not** commit a vault file.
+Secrets should be injected at runtime via AWX survey password fields when needed — do **not** commit a vault file.
 
 For AWX variable management:
 
@@ -125,7 +134,7 @@ mkdir -p /var/lib/awx/job_status
 
 Templates: `piclaw-bootstrap` → `piclaw-openclaw` → `piclaw-verify`
 
-`piclaw-openclaw` prompts for survey answers (`vault_openclaw_admin_password`, `vault_optional_api_token`).
+`piclaw-openclaw` prompts for runtime survey answers.
 
 ## GitHub Automation Included
 

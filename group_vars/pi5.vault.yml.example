@@ -1,10 +1,3 @@
 ---
 # Encrypt this file in real use:
 # ansible-vault encrypt group_vars/pi5.vault.yml
-
-# Admin password passed to the OpenClaw installer as OPENCLAW_ADMIN_PASSWORD.
-vault_openclaw_admin_password: change-me
-
-# Optional upstream API token passed to the OpenClaw installer as OPENCLAW_API_TOKEN.
-# Leave as an empty string if not required by your installer version.
-vault_optional_api_token: change-me

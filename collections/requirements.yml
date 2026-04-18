@@ -1,3 +1,5 @@
 ---
-# No external collections required; all modules used are in ansible.builtin (ansible-core).
-collections: []
+# community.docker is required for the docker role (container management).
+collections:
+  - name: community.docker
+    version: ">=3.10.0"

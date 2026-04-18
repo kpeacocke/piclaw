@@ -1,15 +1,53 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 claw_flavor: openclaw
+openclaw_profile: local-safe
+
+# Local backend controls (used by local-safe profile)
 use_sanitizer_proxy: true
 hailo_model: qwen2:1.5b
 hailo_port: 8000
 proxy_port: 8081
+
+# External provider controls (used by external-power profile)
+openclaw_external_provider_name: custom
+openclaw_external_provider_base_url: ""
+openclaw_external_provider_api: openai-completions
+openclaw_external_provider_model: gpt-4.1-mini
+openclaw_external_provider_api_key: ""
+
+# Shared profile-derived values
+openclaw_use_local_backend: "{{ openclaw_profile == 'local-safe' }}"
+openclaw_provider_name: >-
+  {{ 'ollama' if openclaw_use_local_backend | bool else openclaw_external_provider_name }}
+openclaw_provider_api: >-
+  {{ 'openai-completions' if openclaw_use_local_backend | bool else openclaw_external_provider_api }}
+openclaw_selected_model: >-
+  {{ hailo_model if openclaw_use_local_backend | bool else openclaw_external_provider_model }}
 openclaw_provider_base_url: >-
-  {{ 'http://127.0.0.1:' ~ proxy_port ~ '/v1' if use_sanitizer_proxy else 'http://127.0.0.1:' ~ hailo_port ~ '/v1' }}
+  {{
+    ('http://127.0.0.1:' ~ proxy_port ~ '/v1')
+    if (openclaw_use_local_backend | bool and use_sanitizer_proxy | bool)
+    else (
+      ('http://127.0.0.1:' ~ hailo_port ~ '/v1')
+      if (openclaw_use_local_backend | bool)
+      else openclaw_external_provider_base_url
+    )
+  }}
+openclaw_provider_api_key: >-
+  {{ 'hailo-local' if openclaw_use_local_backend | bool else openclaw_external_provider_api_key }}
+
 openclaw_config_path: /etc/openclaw/config.yml
-openclaw_installer_repo: https://github.com/sanchorelaxo/openclaw-raspberry-installer.git
-openclaw_installer_dest: /opt/openclaw-raspberry-installer
-openclaw_installer_version: "a8ee6e71b51dec741bd67aecc1dac3045a14324a"
+openclaw_user: "{{ pi_user | default(ansible_user | default('pi')) }}"
+openclaw_user_home: "/home/{{ openclaw_user }}"
+openclaw_user_config_dir: "{{ openclaw_user_home }}/.openclaw"
+openclaw_user_config_path: "{{ openclaw_user_config_dir }}/openclaw.json"
+openclaw_auth_profiles_path: "{{ openclaw_user_config_dir }}/agents/main/agent/auth-profiles.json"
+openclaw_gateway_port: 18789
+openclaw_gateway_bind_host: 127.0.0.1
+openclaw_gateway_auth_mode: none
+openclaw_npm_package: openclaw
+openclaw_primary_model_ref: "{{ openclaw_provider_name }}/{{ openclaw_selected_model }}"
 hailo_ollama_service_name: hailo-ollama
 hailo_proxy_service_name: hailo-sanitize-proxy
+hailo_proxy_script_path: /usr/local/bin/hailo-sanitize-proxy.py

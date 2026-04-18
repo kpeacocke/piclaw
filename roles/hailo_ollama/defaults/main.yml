@@ -1,10 +1,11 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
-pi_user: pi
+pi_user: "{{ ansible_user | default('pi') }}"
 hailo_genai_deb_url: https://dev-public.hailo.ai/2025_12/Hailo10/hailo_gen_ai_model_zoo_5.1.1_arm64.deb
 hailo_genai_deb_file: /tmp/hailo_gen_ai_model_zoo_5.1.1_arm64.deb
 hailo_model: qwen2:1.5b
 hailo_bind_host: 127.0.0.1
 hailo_port: 8000
 hailo_ollama_service_name: hailo-ollama
+hailo_ollama_binary_path: /usr/local/bin/hailo-ollama
 chat_smoke_timeout_seconds: 45

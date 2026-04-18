@@ -6,50 +6,43 @@
       - claw_flavor is match('^[a-zA-Z0-9_-]+$')
     fail_msg: "claw_flavor '{{ claw_flavor }}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed."
 
+- name: Validate OpenClaw profile selection
+  ansible.builtin.assert:
+    that:
+      - openclaw_profile in ['local-safe', 'external-power']
+    fail_msg: "openclaw_profile must be one of: local-safe, external-power."
+
 - name: Validate hailo_model contains only safe characters
   ansible.builtin.assert:
     that:
       - hailo_model is match('^[a-zA-Z0-9_./:@-]+$')
     fail_msg: "hailo_model '{{ hailo_model }}' contains invalid characters."
 
-- name: Ensure installer parent directory exists
-  ansible.builtin.file:
-    path: "{{ openclaw_installer_dest | dirname }}"
-    state: directory
-    mode: "0755"
-  become: true
-
-- name: Clone or update OpenClaw installer repository
-  ansible.builtin.git:
-    repo: "{{ openclaw_installer_repo }}"
-    dest: "{{ openclaw_installer_dest }}"
-    version: "{{ openclaw_installer_version }}"
-    update: true
-  become: true
-
-- name: Check installer script presence
-  ansible.builtin.stat:
-    path: "{{ openclaw_installer_dest }}/install.sh"
-  register: openclaw_install_script
-
-- name: Fail when installer script is missing
+- name: Validate selected provider name contains only safe characters
   ansible.builtin.assert:
     that:
-      - openclaw_install_script.stat.exists
-    fail_msg: Installer script not found at {{ openclaw_installer_dest }}/install.sh.
+      - openclaw_provider_name is match('^[a-zA-Z0-9_-]+$')
+    fail_msg: "openclaw_provider_name '{{ openclaw_provider_name }}' contains invalid characters."
 
-- name: Run OpenClaw installer non-interactively
-  ansible.builtin.command: bash install.sh
-  args:
-    chdir: "{{ openclaw_installer_dest }}"
-  environment:
-    CLAW_FLAVOR: "{{ claw_flavor }}"
-    USE_SANITIZER_PROXY_ON_OLLAMA: "{{ (use_sanitizer_proxy | bool) | ternary('true', 'false') }}"
-    HAILO_MODEL: "{{ hailo_model }}"
-    OPENCLAW_ADMIN_PASSWORD: "{{ vault_openclaw_admin_password | default('') }}"
-    OPENCLAW_API_TOKEN: "{{ vault_optional_api_token | default('') }}"
-  changed_when: true
-  no_log: true
+- name: Validate selected provider model contains only safe characters
+  ansible.builtin.assert:
+    that:
+      - openclaw_selected_model is match('^[a-zA-Z0-9_./:@-]+$')
+    fail_msg: "openclaw_selected_model '{{ openclaw_selected_model }}' contains invalid characters."
+
+- name: Validate external provider URL when external profile is selected
+  ansible.builtin.assert:
+    that:
+      - (openclaw_external_provider_base_url | trim | length) > 0
+    fail_msg: "openclaw_external_provider_base_url must be set when openclaw_profile is external-power."
+  when: not (openclaw_use_local_backend | bool)
+
+- name: Ensure OpenClaw prerequisites are installed
+  ansible.builtin.apt:
+    name:
+      - nodejs
+      - npm
+    state: present
   become: true
 
 - name: Ensure Hailo Ollama service is active
@@ -57,6 +50,58 @@
     name: "{{ hailo_ollama_service_name }}"
     enabled: true
     state: started
+  when: openclaw_use_local_backend | bool
+  become: true
+
+- name: Check whether sanitizer proxy script exists
+  ansible.builtin.stat:
+    path: "{{ hailo_proxy_script_path }}"
+  register: openclaw_proxy_script
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+
+- name: Fail when sanitizer proxy is enabled but script is missing
+  ansible.builtin.assert:
+    that:
+      - openclaw_proxy_script.stat.exists
+    fail_msg: >-
+      use_sanitizer_proxy is true but {{ hailo_proxy_script_path }} was not found.
+      Install/provision hailo-sanitize-proxy.py first, or set use_sanitizer_proxy=false.
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+
+- name: Install managed sanitizer proxy systemd unit
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ hailo_proxy_service_name }}.service"
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Hailo sanitize proxy
+      After=network-online.target {{ hailo_ollama_service_name }}.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ openclaw_user }}
+      Group={{ openclaw_user }}
+      Environment=HOME={{ openclaw_user_home }}
+      Environment=HAILO_MODEL={{ hailo_model }}
+      ExecStart=/usr/bin/python3 {{ hailo_proxy_script_path }}
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+  become: true
+
+- name: Check whether managed sanitizer proxy service unit exists
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ hailo_proxy_service_name }}.service"
+  register: openclaw_proxy_unit
+
+- name: Reload systemd daemon for sanitizer proxy
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
   become: true
 
 - name: Ensure sanitizer proxy service is active when enabled
@@ -64,7 +109,7 @@
     name: "{{ hailo_proxy_service_name }}"
     enabled: true
     state: started
-  when: use_sanitizer_proxy | bool
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
   become: true
 
 - name: Ensure sanitizer proxy service is disabled when not enabled
@@ -72,7 +117,187 @@
     name: "{{ hailo_proxy_service_name }}"
     enabled: false
     state: stopped
-  when: not (use_sanitizer_proxy | bool)
+  when:
+    - not (openclaw_use_local_backend | bool and use_sanitizer_proxy | bool)
+    - openclaw_proxy_unit.stat.exists
+  become: true
+
+- name: Check whether OpenClaw CLI is already installed
+  ansible.builtin.command: command -v openclaw
+  register: openclaw_cli_path
+  changed_when: false
+  failed_when: false
+
+- name: Install OpenClaw CLI globally with npm
+  ansible.builtin.command: npm install -g {{ openclaw_npm_package }}
+  when: openclaw_cli_path.rc != 0
+  become: true
+
+- name: Resolve OpenClaw CLI path
+  ansible.builtin.command: command -v openclaw
+  register: openclaw_cli_path_resolved
+  changed_when: false
+
+- name: Ensure OpenClaw user config directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_user_config_dir }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0755"
+  become: true
+
+- name: Ensure OpenClaw auth profile directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_auth_profiles_path | dirname }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0755"
+  become: true
+
+- name: Write OpenClaw user configuration
+  ansible.builtin.copy:
+    dest: "{{ openclaw_user_config_path }}"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0644"
+    content: |
+      {
+        "gateway": {
+          "mode": "local"
+        },
+        "models": {
+          "providers": {
+            "{{ openclaw_provider_name }}": {
+              "baseUrl": "{{ openclaw_provider_base_url }}",
+              "apiKey": "{{ openclaw_provider_api_key }}",
+              "api": "{{ openclaw_provider_api }}",
+              "models": [
+                {
+                  "id": "{{ openclaw_selected_model }}",
+                  "name": "{{ openclaw_selected_model }}",
+                  "reasoning": false,
+                  "input": ["text"],
+                  "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+                  "contextWindow": 16000,
+                  "maxTokens": 2048
+                }
+              ]
+            }
+          }
+        },
+        "agents": {
+          "defaults": {
+            "model": {
+              "primary": "{{ openclaw_primary_model_ref }}"
+            },
+            "models": {
+              "{{ openclaw_primary_model_ref }}": {
+                "streaming": false
+              }
+            },
+            "sandbox": {
+              "mode": "workspace",
+              "rootPath": "~/.openclaw/workspace"
+            }
+          }
+        },
+        "plugins": {
+          "allow": ["nextcloud-talk"]
+        }
+      }
+  become: true
+
+- name: Read OpenClaw user configuration
+  ansible.builtin.slurp:
+    path: "{{ openclaw_user_config_path }}"
+  register: openclaw_user_cfg_content
+
+- name: Verify OpenClaw user provider base URL is configured
+  ansible.builtin.assert:
+    that:
+      - (openclaw_user_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
+    fail_msg: OpenClaw user config does not include expected provider URL {{ openclaw_provider_base_url }}.
+
+- name: Verify OpenClaw user primary model is configured
+  ansible.builtin.assert:
+    that:
+      - (openclaw_user_cfg_content.content | b64decode) is search(openclaw_primary_model_ref)
+    fail_msg: OpenClaw user config does not include expected primary model {{ openclaw_primary_model_ref }}.
+
+- name: Write OpenClaw auth profiles
+  ansible.builtin.copy:
+    dest: "{{ openclaw_auth_profiles_path }}"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0600"
+    content: |
+      {
+        "{{ openclaw_provider_name }}:local": {
+          "type": "token",
+          "provider": "{{ openclaw_provider_name }}",
+          "token": "{{ openclaw_provider_api_key }}"
+        },
+        "lastGood": {
+          "{{ openclaw_provider_name }}": "{{ openclaw_provider_name }}:local"
+        }
+      }
+  become: true
+
+- name: Ensure system OpenClaw config directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Write system OpenClaw provider config
+  ansible.builtin.copy:
+    dest: "{{ openclaw_config_path }}"
+    mode: "0644"
+    content: |
+      provider:
+        name: {{ openclaw_provider_name }}
+        base_url: {{ openclaw_provider_base_url }}
+        api: {{ openclaw_provider_api }}
+        model: {{ openclaw_selected_model }}
+        api_key: {{ openclaw_provider_api_key }}
+  become: true
+
+- name: Install OpenClaw systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/openclaw.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=OpenClaw Gateway
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ openclaw_user }}
+      Group={{ openclaw_user }}
+      Environment=HOME={{ openclaw_user_home }}
+      ExecStart={{ openclaw_cli_path_resolved.stdout }} gateway --port {{ openclaw_gateway_port }} --verbose
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  become: true
+
+- name: Reload systemd daemon for OpenClaw service
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Ensure OpenClaw service is enabled and started
+  ansible.builtin.systemd:
+    name: openclaw
+    enabled: true
+    state: started
   become: true
 
 - name: Gather service facts
@@ -111,3 +336,27 @@
     that:
       - (openclaw_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
     fail_msg: OpenClaw provider URL does not match {{ openclaw_provider_base_url }}.
+
+- name: Run OpenClaw doctor verification
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved.stdout }} doctor"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false
+
+- name: Run OpenClaw status verification
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved.stdout }} status --all"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false
+
+- name: Run OpenClaw health verification
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved.stdout }} health"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false

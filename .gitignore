@@ -16,6 +16,13 @@ ansible.log
 .vault_pass
 .vault_pass.*
 
+# Local AWX API/debug dumps
+launch.json
+launch_spec.json
+survey_spec.json
+updated_survey_spec.json
+final_survey_spec.json
+
 # OS/editor
 .DS_Store
 .idea/

@@ -1,5 +1,5 @@
 ---
-pi_user: pi
+pi_user: "{{ ansible_user | default('pi') }}"
 
 # Local inventory overrides for the `pi5` group.
 # AWX should set environment-specific values in inventory/group/host vars instead.
