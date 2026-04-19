@@ -25,17 +25,21 @@
         "**/node_modules/**": true
     },
     "python.analysis.exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*",
         "**/.venv/**",
         "**/__pycache__/**",
         "**/node_modules/**",
-        "**/.*",
         "hailo-sanitize-proxy.py"
     ],
     "python.analysis.ignore": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*",
         "**/.venv/**",
         "**/__pycache__/**",
         "**/node_modules/**",
-        "**/.*",
         "hailo-sanitize-proxy.py"
     ],
 
