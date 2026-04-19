@@ -136,6 +136,10 @@
   register: openclaw_cli_path_resolved
   changed_when: false
 
+- name: Strip whitespace from OpenClaw CLI path
+  ansible.builtin.set_fact:
+    openclaw_cli_path_resolved: "{{ openclaw_cli_path_resolved.stdout | trim }}"
+
 - name: Ensure OpenClaw user config directory exists
   ansible.builtin.file:
     path: "{{ openclaw_user_config_dir }}"
@@ -282,7 +286,7 @@
       Group={{ openclaw_user }}
       Environment=HOME={{ openclaw_user_home }}
       PassEnvironment={{ openclaw_external_provider_api_key_env }}
-      ExecStart={{ openclaw_cli_path_resolved.stdout }} gateway --port {{ openclaw_gateway_port }} --verbose
+      ExecStart={{ openclaw_cli_path_resolved }} gateway --port {{ openclaw_gateway_port }} --verbose
       Restart=on-failure
       RestartSec=5
 
