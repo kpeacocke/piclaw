@@ -379,6 +379,15 @@
   register: openclaw_unit_file
   become: true
 
+- name: Run openclaw doctor --fix to resolve any setup issues before service start
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor --fix"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false
+  failed_when: false
+
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
     name: openclaw
