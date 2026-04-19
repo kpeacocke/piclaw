@@ -267,8 +267,7 @@
               }
             },
             "sandbox": {
-              "mode": "non-main",
-              "rootPath": "~/.openclaw/workspace"
+              "mode": "non-main"
             }
           }
         },
@@ -377,6 +376,12 @@
       [Install]
       WantedBy=multi-user.target
   register: openclaw_unit_file
+  become: true
+
+- name: Kill any stale openclaw gateway process before service start
+  ansible.builtin.command: pkill -f 'openclaw-gateway'
+  failed_when: false
+  changed_when: false
   become: true
 
 - name: Ensure OpenClaw service is enabled and started
