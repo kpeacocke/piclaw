@@ -45,7 +45,16 @@
       [Install]
       WantedBy=multi-user.target
     dest: /etc/systemd/system/hailo-ollama.service
-  notify: Reload systemd daemon
+  register: hailo_ollama_service_unit
+  become: true
+
+- name: Reload systemd and restart Hailo Ollama when unit changes
+  ansible.builtin.systemd:
+    name: "{{ hailo_ollama_service_name }}"
+    daemon_reload: true
+    enabled: true
+    state: restarted
+  when: hailo_ollama_service_unit.changed
   become: true
 
 - name: Ensure Hailo Ollama service is enabled and started
@@ -53,6 +62,8 @@
     name: "{{ hailo_ollama_service_name }}"
     enabled: true
     state: started
+    daemon_reload: true
+  when: not hailo_ollama_service_unit.changed
   changed_when: false
   become: true
 
