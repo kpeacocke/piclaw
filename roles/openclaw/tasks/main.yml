@@ -6,65 +6,131 @@
       - claw_flavor is match('^[a-zA-Z0-9_-]+$')
     fail_msg: "claw_flavor '{{ claw_flavor }}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed."
 
+- name: Validate OpenClaw profile selection
+  ansible.builtin.assert:
+    that:
+      - openclaw_profile in ['local-safe', 'external-power']
+    fail_msg: "openclaw_profile must be one of: local-safe, external-power."
+
 - name: Validate hailo_model contains only safe characters
   ansible.builtin.assert:
     that:
       - hailo_model is match('^[a-zA-Z0-9_./:@-]+$')
     fail_msg: "hailo_model '{{ hailo_model }}' contains invalid characters."
 
-- name: Ensure installer parent directory exists
-  ansible.builtin.file:
-    path: "{{ openclaw_installer_dest | dirname }}"
-    state: directory
-    mode: "0755"
-  become: true
-
-- name: Clone or update OpenClaw installer repository
-  ansible.builtin.git:
-    repo: "{{ openclaw_installer_repo }}"
-    dest: "{{ openclaw_installer_dest }}"
-    version: "{{ openclaw_installer_version }}"
-    update: true
-  become: true
-
-- name: Check installer script presence
-  ansible.builtin.stat:
-    path: "{{ openclaw_installer_dest }}/install.sh"
-  register: openclaw_install_script
-
-- name: Fail when installer script is missing
+- name: Validate selected provider name contains only safe characters
   ansible.builtin.assert:
     that:
-      - openclaw_install_script.stat.exists
-    fail_msg: Installer script not found at {{ openclaw_installer_dest }}/install.sh.
+      - openclaw_provider_name is match('^[a-zA-Z0-9_-]+$')
+    fail_msg: "openclaw_provider_name '{{ openclaw_provider_name }}' contains invalid characters."
 
-- name: Run OpenClaw installer non-interactively
-  ansible.builtin.command: bash install.sh
-  args:
-    chdir: "{{ openclaw_installer_dest }}"
-  environment:
-    CLAW_FLAVOR: "{{ claw_flavor }}"
-    USE_SANITIZER_PROXY_ON_OLLAMA: "{{ (use_sanitizer_proxy | bool) | ternary('true', 'false') }}"
-    HAILO_MODEL: "{{ hailo_model }}"
-    OPENCLAW_ADMIN_PASSWORD: "{{ vault_openclaw_admin_password | default('') }}"
-    OPENCLAW_API_TOKEN: "{{ vault_optional_api_token | default('') }}"
-  changed_when: true
-  no_log: true
-  become: true
+- name: Validate selected provider model contains only safe characters
+  ansible.builtin.assert:
+    that:
+      - openclaw_selected_model is match('^[a-zA-Z0-9_./:@-]+$')
+    fail_msg: "openclaw_selected_model '{{ openclaw_selected_model }}' contains invalid characters."
+
+- name: Validate external provider URL when external profile is selected
+  ansible.builtin.assert:
+    that:
+      - (openclaw_external_provider_base_url | trim | length) > 0
+    fail_msg: "openclaw_external_provider_base_url must be set when openclaw_profile is external-power."
+  when: not (openclaw_use_local_backend | bool)
+
+- name: Validate external provider API key env var name when external profile is selected
+  ansible.builtin.assert:
+    that:
+      - openclaw_external_provider_api_key_env is match('^[A-Z_][A-Z0-9_]*$')
+    fail_msg: >-
+      openclaw_external_provider_api_key_env must be a valid environment variable name.
+  when: not (openclaw_use_local_backend | bool)
+
+- name: Check installed Node.js version
+  ansible.builtin.command: node --version
+  register: openclaw_node_version
+  changed_when: false
+  failed_when: false
+
+- name: Normalize Node.js version string
+  ansible.builtin.set_fact:
+    openclaw_node_version_clean: >-
+      {{ (openclaw_node_version.stdout | default('v0.0.0') | trim | regex_replace('^v', '')) }}
+
+- name: Verify Node.js satisfies OpenClaw minimum version
+  ansible.builtin.assert:
+    that:
+      - openclaw_node_version_clean is version('22.12.0', '>=')
+    fail_msg: >-
+      OpenClaw requires Node.js >= 22.12.0, but found {{ openclaw_node_version.stdout | default('unknown') }}.
+      Ensure the bootstrap playbook has run to provision Node.js 22.
+
+- name: Check npm version
+  ansible.builtin.command: npm --version
+  register: openclaw_npm_version
+  changed_when: false
+  failed_when: false
+
+- name: Verify npm is available
+  ansible.builtin.assert:
+    that:
+      - openclaw_npm_version.rc == 0
+    fail_msg: >-
+      npm is not available on the host. Install Node.js via bootstrap so npm is provisioned with nodejs.
 
 - name: Ensure Hailo Ollama service is active
   ansible.builtin.systemd:
     name: "{{ hailo_ollama_service_name }}"
     enabled: true
     state: started
+  when: openclaw_use_local_backend | bool
   become: true
+
+- name: Install sanitizer proxy script from project
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../hailo-sanitize-proxy.py"
+    dest: "{{ hailo_proxy_script_path }}"
+    mode: "0755"
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+  become: true
+
+- name: Install managed sanitizer proxy systemd unit
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ hailo_proxy_service_name }}.service"
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Hailo sanitize proxy
+      After=network-online.target {{ hailo_ollama_service_name }}.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ openclaw_user }}
+      Group={{ openclaw_user }}
+      Environment=HOME={{ openclaw_user_home }}
+      Environment=HAILO_MODEL={{ openclaw_selected_model }}
+      ExecStart=/usr/bin/python3 {{ hailo_proxy_script_path }}
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+  register: openclaw_proxy_unit_file
+  become: true
+
+- name: Check whether managed sanitizer proxy service unit exists
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ hailo_proxy_service_name }}.service"
+  register: openclaw_proxy_unit
 
 - name: Ensure sanitizer proxy service is active when enabled
   ansible.builtin.systemd:
     name: "{{ hailo_proxy_service_name }}"
     enabled: true
-    state: started
-  when: use_sanitizer_proxy | bool
+    daemon_reload: true
+    state: "{{ 'restarted' if (openclaw_proxy_unit_file.changed | default(false)) else 'started' }}"
+  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
   become: true
 
 - name: Ensure sanitizer proxy service is disabled when not enabled
@@ -72,22 +138,272 @@
     name: "{{ hailo_proxy_service_name }}"
     enabled: false
     state: stopped
-  when: not (use_sanitizer_proxy | bool)
+  when:
+    - not (openclaw_use_local_backend | bool and use_sanitizer_proxy | bool)
+    - openclaw_proxy_unit.stat.exists
   become: true
 
-- name: Gather service facts
-  ansible.builtin.service_facts:
+- name: Check whether OpenClaw CLI is already installed
+  ansible.builtin.command: which openclaw
+  register: openclaw_cli_path
+  changed_when: false
+  failed_when: false
+
+- name: Install OpenClaw CLI globally with npm
+  ansible.builtin.command: npm install -g {{ openclaw_npm_package }}
+  when: openclaw_cli_path.rc != 0
+  changed_when: true
   become: true
 
-- name: Verify OpenClaw gateway/process is active
+- name: Resolve OpenClaw CLI path
+  ansible.builtin.command: which openclaw
+  register: openclaw_cli_path_resolved
+  changed_when: false
+
+- name: Strip whitespace from OpenClaw CLI path
+  ansible.builtin.set_fact:
+    openclaw_cli_path_resolved: "{{ openclaw_cli_path_resolved.stdout | trim }}"
+
+- name: Stop OpenClaw service before config update
+  ansible.builtin.systemd:
+    name: openclaw
+    state: stopped
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Release port and kill all stray OpenClaw processes before config update
+  ansible.builtin.shell: |
+    fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
+    pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
+  become: true
+  changed_when: false
+
+- name: Remove stale OpenClaw user config and backup
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - "{{ openclaw_user_config_path }}"
+    - "{{ openclaw_user_config_path }}.bak"
+
+- name: Ensure OpenClaw user config directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_user_config_dir }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0755"
+  become: true
+
+- name: Ensure OpenClaw auth profile directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_auth_profiles_path | dirname }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0755"
+  become: true
+
+- name: Write OpenClaw user configuration
+  ansible.builtin.copy:
+    dest: "{{ openclaw_user_config_path }}"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0600"
+    content: |
+      {
+        "gateway": {
+          "mode": "local"
+        },
+        "models": {
+          "providers": {
+            "{{ openclaw_provider_name }}": {
+              "baseUrl": "{{ openclaw_provider_base_url }}",
+              "apiKey": "{{ openclaw_provider_api_key_ref }}",
+              "api": "{{ openclaw_provider_api }}",
+              "models": [
+                {
+                  "id": "{{ openclaw_selected_model }}",
+                  "name": "{{ openclaw_selected_model }}",
+                  "reasoning": false,
+                  "input": ["text"],
+                  "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+                  "contextWindow": 16000,
+                  "maxTokens": 2048
+                }
+              ]
+            }
+          }
+        },
+        "agents": {
+          "defaults": {
+            "model": {
+              "primary": "{{ openclaw_primary_model_ref }}"
+            },
+            "models": {
+              "{{ openclaw_primary_model_ref }}": {
+                "streaming": false
+              }
+            },
+            "sandbox": {
+              "mode": "non-main"
+            }
+          }
+        },
+        "plugins": {
+          "allow": ["nextcloud-talk"]
+        }
+      }
+  no_log: true
+  become: true
+
+- name: Read OpenClaw user configuration
+  ansible.builtin.slurp:
+    path: "{{ openclaw_user_config_path }}"
+  register: openclaw_user_cfg_content
+
+- name: Verify OpenClaw user provider base URL is configured
   ansible.builtin.assert:
     that:
-      - >-
-        ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
-        or ansible_facts.services.get('openclaw-gateway.service', {}).get('state', 'stopped') == 'running'
-        or ansible_facts.services.get('claw-gateway.service', {}).get('state', 'stopped') == 'running'
-    fail_msg: >-
-      None of openclaw.service, openclaw-gateway.service, or claw-gateway.service are active.
+      - (openclaw_user_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
+    fail_msg: OpenClaw user config does not include expected provider URL {{ openclaw_provider_base_url }}.
+
+- name: Verify OpenClaw user primary model is configured
+  ansible.builtin.assert:
+    that:
+      - (openclaw_user_cfg_content.content | b64decode) is search(openclaw_primary_model_ref)
+    fail_msg: OpenClaw user config does not include expected primary model {{ openclaw_primary_model_ref }}.
+
+- name: Write OpenClaw auth profiles
+  ansible.builtin.copy:
+    dest: "{{ openclaw_auth_profiles_path }}"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0600"
+    content: |
+      {
+        "{{ openclaw_provider_name }}:local": {
+          "type": "token",
+          "provider": "{{ openclaw_provider_name }}",
+          "token": "{{ openclaw_provider_api_key_ref }}"
+        },
+        "lastGood": {
+          "{{ openclaw_provider_name }}": "{{ openclaw_provider_name }}:local"
+        }
+      }
+  no_log: true
+  become: true
+
+- name: Ensure system OpenClaw config directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Write system OpenClaw provider config
+  ansible.builtin.copy:
+    dest: "{{ openclaw_config_path }}"
+    mode: "0600"
+    content: |
+      provider:
+        name: {{ openclaw_provider_name }}
+        base_url: {{ openclaw_provider_base_url }}
+        api: {{ openclaw_provider_api }}
+        model: {{ openclaw_selected_model }}
+        api_key: {{ openclaw_provider_api_key_ref }}
+  no_log: true
+  become: true
+
+- name: Install OpenClaw systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/openclaw.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=OpenClaw Gateway
+      After=network-online.target
+      {% if openclaw_use_local_backend | bool and use_sanitizer_proxy | bool %}
+      After={{ hailo_proxy_service_name }}.service
+      {% endif %}
+      {% if openclaw_use_local_backend | bool %}
+      After={{ hailo_ollama_service_name }}.service
+      {% endif %}
+      Wants=network-online.target
+      {% if openclaw_use_local_backend | bool %}
+      Requires={{ hailo_ollama_service_name }}.service
+      {% endif %}
+
+      [Service]
+      Type=simple
+      User={{ openclaw_user }}
+      Group={{ openclaw_user }}
+      Environment=HOME={{ openclaw_user_home }}
+      Environment=OPENCLAW_GATEWAY_PORT={{ openclaw_gateway_port }}
+      Environment=OPENCLAW_GATEWAY_BIND={{ openclaw_gateway_bind_host }}
+      PassEnvironment={{ openclaw_external_provider_api_key_env }}
+      ExecStart={{ openclaw_cli_path_resolved }} gateway --port {{ openclaw_gateway_port }} --verbose
+      Restart=on-failure
+      RestartSec=5
+      StartLimitInterval=60
+      StartLimitBurst=3
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=openclaw
+      KillMode=control-group
+      KillSignal=SIGTERM
+      TimeoutStopSec=10
+      SendSIGKILL=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  register: openclaw_unit_file
+  become: true
+
+- name: Release port and kill remaining OpenClaw processes before start
+  ansible.builtin.shell: |
+    fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
+    pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
+  become: true
+  changed_when: false
+
+- name: Ensure OpenClaw service is enabled and started
+  ansible.builtin.systemd:
+    name: openclaw
+    enabled: true
+    daemon_reload: true
+    state: "{{ 'restarted' if openclaw_unit_file.changed else 'started' }}"
+  become: true
+
+- name: Wait for OpenClaw service to become active
+  ansible.builtin.service_facts:
+  register: openclaw_service_facts
+  changed_when: false
+  failed_when: false
+  retries: 10
+  delay: 2
+  until: ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') == 'running'
+  become: true
+
+- name: Capture OpenClaw service logs when not active
+  ansible.builtin.command: journalctl -u openclaw.service -n 80 --no-pager
+  register: openclaw_service_journal
+  changed_when: false
+  failed_when: false
+  when: ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') != 'running'
+  become: true
+
+- name: Verify OpenClaw service is active
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') == 'running'
+    fail_msg: |-
+      openclaw.service did not reach active state after start/retry.
+      service_facts state: {{ ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'unknown') }}
+      recent journal:
+      {{ openclaw_service_journal.stdout | default('journal unavailable') }}
   become: true
 
 - name: Check OpenClaw provider config file exists
@@ -111,3 +427,27 @@
     that:
       - (openclaw_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
     fail_msg: OpenClaw provider URL does not match {{ openclaw_provider_base_url }}.
+
+- name: Run OpenClaw doctor verification
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false
+
+- name: Run OpenClaw status verification
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} status --all"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false
+
+- name: Run OpenClaw health verification
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} health"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+  changed_when: false

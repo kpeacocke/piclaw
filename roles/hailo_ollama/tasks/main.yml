@@ -1,17 +1,60 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
-- name: Install Hailo GenAI model-zoo package (latest)
-  ansible.builtin.apt:
-    name: "{{ hailo_genai_package }}"
-    state: present
-  when: hailo_genai_package_version | length == 0
+- name: Download Hailo GenAI model-zoo Debian package
+  ansible.builtin.get_url:
+    url: "{{ hailo_genai_deb_url }}"
+    dest: "{{ hailo_genai_deb_file }}"
+    checksum: "sha256:{{ hailo_genai_deb_sha256 }}"
+    mode: "0644"
   become: true
 
-- name: Install Hailo GenAI model-zoo package (pinned version)
+- name: Install Hailo GenAI model-zoo from Debian package
   ansible.builtin.apt:
-    name: "{{ hailo_genai_package }}={{ hailo_genai_package_version }}"
-    state: present
-  when: hailo_genai_package_version | length > 0
+    deb: "{{ hailo_genai_deb_file }}"
+  become: true
+
+- name: Resolve hailo-ollama binary path
+  ansible.builtin.command: which hailo-ollama
+  register: hailo_ollama_binary_resolved
+  changed_when: false
+
+- name: Assert hailo-ollama binary is available
+  ansible.builtin.assert:
+    that:
+      - hailo_ollama_binary_resolved.stdout | length > 0
+    fail_msg: hailo-ollama binary was not found on PATH after package installation.
+
+- name: Create hailo-ollama systemd service unit file
+  ansible.builtin.copy:
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Hailo Ollama Model Server
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ pi_user }}
+      Environment=HOME=/home/{{ pi_user }}
+      Environment=OLLAMA_HOST={{ hailo_bind_host }}:{{ hailo_port }}
+      ExecStart={{ hailo_ollama_binary_resolved.stdout }}
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/hailo-ollama.service
+  register: hailo_ollama_service_unit
+  become: true
+
+- name: Reload systemd and restart Hailo Ollama when unit changes
+  ansible.builtin.systemd:
+    name: "{{ hailo_ollama_service_name }}"
+    daemon_reload: true
+    enabled: true
+    state: restarted
+  when: hailo_ollama_service_unit.changed
   become: true
 
 - name: Ensure Hailo Ollama service is enabled and started
@@ -19,6 +62,9 @@
     name: "{{ hailo_ollama_service_name }}"
     enabled: true
     state: started
+    daemon_reload: true
+  when: not hailo_ollama_service_unit.changed
+  changed_when: false
   become: true
 
 - name: Wait for Hailo Ollama API readiness
@@ -38,7 +84,9 @@
     body_format: json
     body:
       model: "{{ hailo_model }}"
+      stream: false
     status_code: 200
+    return_content: true
     timeout: 1800
   register: hailo_pull
 
@@ -50,11 +98,30 @@
     status_code: 200
   register: hailo_tags
 
+- name: Capture available Hailo model tags
+  ansible.builtin.set_fact:
+    hailo_available_models: "{{ hailo_tags.json.models | default([]) | map(attribute='name') | list }}"
+
+- name: Resolve Hailo runtime model tag
+  ansible.builtin.set_fact:
+    hailo_runtime_model: >-
+      {{
+        (hailo_available_models | select('equalto', hailo_model) | list | first)
+        | default(
+            (hailo_available_models
+             | select('match', '^(' ~ (hailo_model | regex_escape) ~ '|.*/' ~ (hailo_model | regex_escape) ~ ')([._-].*)?$')
+             | list | first),
+            true
+          )
+      }}
+
 - name: Assert selected model is present
   ansible.builtin.assert:
     that:
-      - (hailo_tags.json.models | default([]) | map(attribute='name') | list) is contains(hailo_model)
-    fail_msg: "Model {{ hailo_model }} was not found in /api/tags."
+      - (hailo_runtime_model | default('') | length) > 0
+    fail_msg: >-
+      Model {{ hailo_model }} was not found in /api/tags.
+      Available tags: {{ hailo_available_models | join(', ') if (hailo_available_models | length > 0) else 'none' }}
 
 - name: Perform chat smoke test against local backend
   ansible.builtin.uri:
@@ -62,7 +129,7 @@
     method: POST
     body_format: json
     body:
-      model: "{{ hailo_model }}"
+      model: "{{ hailo_runtime_model }}"
       stream: false
       messages:
         - role: user

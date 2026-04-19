@@ -1,6 +1,12 @@
 ---
 extends: default
 
+ignore: |
+  .venv/
+  venv/
+  .github/
+  README.md
+
 rules:
   line-length:
     max: 160

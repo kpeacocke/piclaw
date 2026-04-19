@@ -1,3 +1,4 @@
+---
 default_language_version:
   python: python3
 
@@ -36,3 +37,4 @@ repos:
     rev: v4.0.5
     hooks:
       - id: pylint
+        exclude: ^hailo-sanitize-proxy\.py$

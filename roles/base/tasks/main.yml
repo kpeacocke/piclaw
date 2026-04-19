@@ -1,5 +1,23 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
+- name: Ensure PCIe Gen 3.0 is configured in config.txt
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=pciex1_gen='
+    line: dtparam=pciex1_gen=3
+    state: present
+  when: pcie_gen3_enabled | bool
+  register: pcie_gen3_config
+  become: true
+
+- name: Reboot after PCIe Gen 3.0 configuration change
+  ansible.builtin.reboot:
+    msg: Reboot initiated by Ansible after PCIe Gen 3.0 configuration.
+    reboot_timeout: 900
+    post_reboot_delay: 10
+  when: pcie_gen3_config is defined and pcie_gen3_config.changed
+  become: true
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
@@ -23,6 +41,49 @@
       - python3-pip
       - pciutils
     state: present
+  become: true
+
+- name: Check installed Node.js version
+  ansible.builtin.command: node --version
+  register: base_node_version
+  changed_when: false
+  failed_when: false
+
+- name: Normalize Node.js version string
+  ansible.builtin.set_fact:
+    base_node_version_clean: >-
+      {{ (base_node_version.stdout | default('v0.0.0') | trim | regex_replace('^v', '')) }}
+
+- name: Ensure NodeSource keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  when: base_node_version_clean is version(bootstrap_nodejs_min_version, '<')
+  become: true
+
+- name: Install NodeSource GPG key
+  ansible.builtin.get_url:
+    url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+    dest: /etc/apt/keyrings/nodesource.gpg
+    mode: "0644"
+  when: base_node_version_clean is version(bootstrap_nodejs_min_version, '<')
+  become: true
+
+- name: Configure NodeSource Node.js 22 repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main"
+    filename: nodesource
+    state: present
+  when: base_node_version_clean is version(bootstrap_nodejs_min_version, '<')
+  become: true
+
+- name: Ensure Node.js is upgraded to required version
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+  when: base_node_version_clean is version(bootstrap_nodejs_min_version, '<')
   become: true
 
 - name: Apply EEPROM updates

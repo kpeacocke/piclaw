@@ -9,6 +9,39 @@
 
     "python.analysis.typeCheckingMode": "strict",
     "python.analysis.diagnosticMode": "workspace",
+    "files.exclude": {
+        "**/.venv": true,
+        "**/__pycache__": true,
+        "**/node_modules": true
+    },
+    "search.exclude": {
+        "**/.venv": true,
+        "**/__pycache__": true,
+        "**/node_modules": true
+    },
+    "files.watcherExclude": {
+        "**/.venv/**": true,
+        "**/__pycache__/**": true,
+        "**/node_modules/**": true
+    },
+    "python.analysis.exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*",
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/node_modules/**",
+        "hailo-sanitize-proxy.py"
+    ],
+    "python.analysis.ignore": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*",
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/node_modules/**",
+        "hailo-sanitize-proxy.py"
+    ],
 
     "ruff.nativeServer": "on",
 

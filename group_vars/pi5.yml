@@ -1,42 +1,10 @@
 ---
-pi_user: pi
+pi_user: "{{ ansible_user | default('pi') }}"
 
-use_sanitizer_proxy: true
-claw_flavor: openclaw
+# Local inventory overrides for the `pi5` group.
+# AWX should set environment-specific values in inventory/group/host vars instead.
+# Repository-wide defaults now live under each role's defaults/main.yml.
 
+# Common local overrides:
 hailo_model: qwen2:1.5b
-hailo_bind_host: 127.0.0.1
-hailo_port: 8000
-proxy_port: 8081
-
-openclaw_provider_base_url: >-
-  {{ 'http://127.0.0.1:' ~ proxy_port ~ '/v1' if use_sanitizer_proxy else 'http://127.0.0.1:' ~ hailo_port ~ '/v1' }}
-
-# Override if your OpenClaw install writes config elsewhere.
-openclaw_config_path: /etc/openclaw/config.yml
-
-# Hailo GenAI / model-zoo package controls.
-hailo_genai_package: hailo-genai-model-zoo
-hailo_genai_package_version: ""
-
-# Hailo base stack version pin. Set to a specific apt version string (e.g. "1.4.0") to pin.
-# Empty string installs the latest available package.
-hailo_h10_all_version: ""
-
-hailo_ollama_service_name: hailo-ollama
-hailo_proxy_service_name: hailo-sanitize-proxy
-
-# OpenClaw installer source.
-# IMPORTANT: Pin openclaw_installer_version to a specific commit SHA before running in production.
-# Using a branch name (e.g. "main") means any upstream commit runs as root on this device.
-# Example: openclaw_installer_version: "abc1234def5678..."
-openclaw_installer_repo: https://github.com/sanchorelaxo/openclaw-raspberry-installer.git
-openclaw_installer_dest: /opt/openclaw-raspberry-installer
-openclaw_installer_version: "a8ee6e71b51dec741bd67aecc1dac3045a14324a"
-
-# OS upgrade guard. Set to true only when deliberately running a full OS upgrade.
-# Keeping false prevents unintended upgrades on every playbook run.
-run_full_upgrade: false
-
-# Validation behavior.
-chat_smoke_timeout_seconds: 45
+use_sanitizer_proxy: true

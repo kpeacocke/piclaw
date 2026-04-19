@@ -1,70 +1,201 @@
-# Pi 5 + AI HAT+ 2 OpenClaw Runbook (Ansible)
+# Pi 5 + AI HAT+ 2 OpenClaw Stack
 
-This repository enforces a known-good state for Raspberry Pi 5 + AI HAT+ 2 using Ansible.
+[![CI](https://github.com/kpeacocke/piclaw/actions/workflows/ansible-ci.yml/badge.svg)](https://github.com/kpeacocke/piclaw/actions/workflows/ansible-ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
+[![Ansible 2.20+](https://img.shields.io/badge/ansible-2.20%2B-blue.svg)](https://ansible.com/)
 
-## Assumptions
+Deploy a **privacy-preserving AI inference gateway** on Raspberry Pi 5 + AI HAT+ 2 using Ansible. Run large language models locally on edge hardware with hardware acceleration (Hailo NPU) and expose them via an **OpenAI-compatible API**.
 
-- Raspberry Pi 5
-- Raspberry Pi OS Trixie 64-bit
-- AI HAT+ 2 (Hailo-10H)
-- Local inference and OpenClaw flavor
+## What You Get
 
-## Package Guardrail
+- **OpenClaw Gateway** — OpenAI-compatible REST API for local LLM inference
+  - Web UI (Canvas) for interactive chat
+  - Streaming completions support
+  - No cloud dependency, no API keys sent externally
+- **Hailo NPU Acceleration** — Hardware-accelerated inference on AI HAT+ 2 (Hailo-10H)
+- **Ollama Integration** — Local model management (pull, load, cache)
+- **Flexible Profiles**
+  - `local-safe`: Fully local inference (privacy-first)
+  - `external-power`: Fallback to cloud providers (OpenAI, etc.)
+- **Idempotent Ansible Playbooks** — Repeatable, validated deployments
+- **CI/CD Ready** — Pre-commit hooks, linting, molecule testing, GitHub Actions
 
-- Use `hailo-h10-all` on AI HAT+ 2
-- Do not mix with `hailo-all` on this hardware
+## Quick Start
 
-## Repository Layout
+### Prerequisites
 
-- `inventories/prod/hosts.yml`
-- `group_vars/pi5.yml`
-- `roles/base`
-- `roles/hailo`
-- `roles/hailo_ollama`
-- `roles/openclaw`
-- `roles/validate`
-- `playbooks/bootstrap.yml`
-- `playbooks/openclaw.yml`
-- `playbooks/verify.yml`
-- `awx/job_templates.yml`
-- `awx/surveys.yml`
-- `group_vars/pi5.vault.yml.example`
-- `molecule/default`
+- **Hardware**: Raspberry Pi 5 + AI HAT+ 2 (Hailo-10H)
+- **OS**: Raspberry Pi OS Trixie 64-bit (fresh install recommended)
+- **Control Host**: Ansible 2.20+ with Python 3.14+
 
-## Configure Variables
+### 1. Configure Target Host
 
-Edit `group_vars/pi5.yml`:
+Edit `inventories/prod/hosts.yml` to point to your Pi:
 
-- `pi_user`
-- `use_sanitizer_proxy`
-- `claw_flavor`
-- `hailo_model`
-- `hailo_bind_host`
-- `hailo_port`
-- `proxy_port`
-- `openclaw_provider_base_url`
-- `openclaw_config_path` (if your install path differs)
-
-Edit inventory host target in `inventories/prod/hosts.yml`.
-
-For encrypted secrets, copy `group_vars/pi5.vault.yml.example` to `group_vars/pi5.vault.yml` and encrypt it:
-
-```bash
-cp group_vars/pi5.vault.yml.example group_vars/pi5.vault.yml
-ansible-vault encrypt group_vars/pi5.vault.yml
+```yaml
+pi5-node:
+  ansible_host: 192.168.1.50  # ← Update to your Pi's IP
+  ansible_user: pi
 ```
 
-## Execution Order
+### 2. Run Playbooks (in order)
 
 ```bash
+# 1. Bootstrap: OS packages, firmware, Hailo runtime
+ansible-playbook playbooks/bootstrap.yml -l pi5
+
+# 2. Deploy: Ollama + OpenClaw gateway
+ansible-playbook playbooks/openclaw.yml -l pi5
+
+# 3. Verify: Functional tests (chat roundtrip, health checks)
+ansible-playbook playbooks/verify.yml -l pi5
+```
+
+### 3. Use the Gateway
+
+Once deployed, OpenClaw listens on `127.0.0.1:18789` (SSH port-forward to access from your machine):
+
+```bash
+ssh -L 18789:127.0.0.1:18789 pi@192.168.1.50
+
+# Option 1: Web UI (Canvas)
+# Open http://localhost:18789/__openclaw__/canvas/ in your browser
+
+# Option 2: CLI
+ssh pi@192.168.1.50 openclaw chat
+
+# Option 3: OpenAI-compatible API
+curl http://127.0.0.1:18789/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "ollama/qwen2:1.5b",
+    "messages": [{"role": "user", "content": "Hello, OpenClaw!"}]
+  }'
+```
+
+## Deployment Modes
+
+### Standalone (CLI)
+
+```bash
+# Copy repo to your control machine
+git clone https://github.com/kpeacocke/piclaw.git
+cd piclaw
+
+# Set up local dev environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+ansible-galaxy collection install -r collections/requirements.yml
+
+# Run playbooks
 ansible-playbook playbooks/bootstrap.yml -l pi5
 ansible-playbook playbooks/openclaw.yml -l pi5
 ansible-playbook playbooks/verify.yml -l pi5
 ```
 
-## Development Bootstrap
+### AWX (Orchestration)
 
-Install local development tooling and hooks:
+Import job templates from `awx/job_templates.yml`. AWX manages:
+- Inventory + host vars
+- Survey-driven variable overrides
+- Secrets injection
+- Job history and audit logs
+- Execution on execution nodes
+
+See [AWX Setup](#awx-setup) for details.
+
+## Configuration
+
+### Core Variables
+
+Repository defaults live in each role's `defaults/main.yml`. Override them in one of:
+
+1. `group_vars/pi5.yml` — For all Pi 5s in the inventory
+2. AWX inventory/group/host vars — Per-host overrides
+3. Playbook `extra_vars` — Runtime via CLI or survey
+
+### Key Options
+
+**OpenClaw Profile** (`openclaw_profile`)
+- `local-safe` (default) — All inference runs on Hailo NPU via Ollama
+- `external-power` — Fallback to cloud API (e.g., OpenAI)
+
+**Model Selection** (`hailo_model`)
+- Default: `qwen2:1.5b` (1.5B parameter, fast, low VRAM)
+- Options: Any Ollama model compatible with Hailo's quantization constraints
+
+**Sanitizer Proxy** (`use_sanitizer_proxy`)
+- Enabled by default — Adds safety layer to Ollama responses
+- Set to `false` to skip
+
+**External Provider** (for `external-power`)
+```yaml
+openclaw_external_provider_name: custom
+openclaw_external_provider_base_url: https://api.openai.com/v1
+openclaw_external_provider_api: openai-completions
+openclaw_external_provider_model: gpt-4-mini
+openclaw_external_provider_api_key_env: OPENAI_API_KEY
+```
+
+## What Gets Installed & Validated
+
+Each playbook enforces a known-good state:
+
+### `bootstrap.yml`
+- OS packages and security updates
+- Firmware updates + reboot handling
+- PCIe Gen 3.0 optimization
+- Hailo runtime and driver installation
+- Hardware probe (PCIe enumeration check)
+
+### `openclaw.yml`
+- Hailo Ollama integration (model pull and cache)
+- OpenClaw installer and systemd service
+- Provider configuration (local or external)
+- Optional sanitizer proxy
+- Port 18789 is available and responding
+
+### `verify.yml`
+- Smoke test: Chat roundtrip (request → response)
+- Health checks: Gateway and Ollama health endpoints
+- Doctor verification: System readiness report
+
+## Repository Structure
+
+```
+.
+├── playbooks/
+│   ├── bootstrap.yml      # OS setup, firmware, Hailo runtime
+│   ├── openclaw.yml       # Ollama, gateway, provider config
+│   └── verify.yml         # Smoke tests and health checks
+├── roles/
+│   ├── base/              # OS packages, EEPROM, PCIe config
+│   ├── hailo/             # Hailo runtime and driver
+│   ├── hailo_ollama/      # Ollama + model integration
+│   ├── openclaw/          # OpenClaw gateway + systemd
+│   └── validate/          # Verification and smoke tests
+├── inventories/
+│   └── prod/hosts.yml     # Target Pi host and group vars
+├── group_vars/
+│   ├── pi5.yml            # Local overrides
+│   └── pi5.vault.yml.example
+├── awx/                   # Job template and survey specs
+├── collections/
+│   └── requirements.yml    # Ansible collection dependencies
+├── molecule/
+│   └── default/           # Role testing (syntax/lint focused)
+├── tests/
+│   └── test_molecule_default.py
+└── .github/
+    ├── workflows/         # CI/CD automation (lint, test, release)
+    └── ISSUE_TEMPLATE/    # Bug and feature templates
+```
+
+## Development
+
+### Local Setup
 
 ```bash
 python3 -m venv .venv
@@ -75,109 +206,132 @@ ansible-galaxy collection install -r collections/requirements.yml
 pre-commit install
 ```
 
-Run quality gates locally:
+### Quality Checks
 
 ```bash
+# All checks in one go
 pre-commit run --all-files
-ansible-playbook --syntax-check playbooks/bootstrap.yml
-ansible-playbook --syntax-check playbooks/openclaw.yml
-ansible-playbook --syntax-check playbooks/verify.yml
-molecule test -s default
+
+# Individual checks
+ansible-lint                                         # Playbook lint
+yamllint .                                          # YAML syntax
+ansible-playbook --syntax-check playbooks/*.yml    # Ansible syntax
+molecule test                                       # Role testing
+pytest                                              # Python unit tests
 ```
 
-See `CONTRIBUTING.md` for contribution workflow details.
+All checks pass by default before commit (pre-commit hooks).
+
+### Running on Hardware
+
+Test code changes on a real Pi before submitting a PR:
+
+```bash
+# SSH to the Pi and check status
+ssh pi@192.168.1.50 openclaw status
+
+# Re-run a single playbook
+ansible-playbook playbooks/openclaw.yml -l pi5 -v
+
+# Check logs on the Pi
+ssh pi@192.168.1.50 journalctl -u openclaw -n 50 -f
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, PRs, and release workflow.
 
 ## AWX Setup
 
-Job templates and survey definitions are in `awx/job_templates.yml` and `awx/surveys.yml` as reference specs. Create them in AWX manually or via the API.
+### Quick Import
 
-Secrets (`vault_openclaw_admin_password`, `vault_optional_api_token`) are injected at runtime via AWX survey password fields — do **not** commit a vault file.
+Job templates and surveys are defined in `awx/job_templates.yml` and `awx/surveys.yml`. Create them in AWX via:
 
-### Receptor Mesh Topology
+1. **API**: `awx-cli` or `curl` with the YAML spec
+2. **UI**: Create manually, use the specs as reference
+3. **Automation**: Third-party AWX provisioning tools
 
-AWX uses Receptor to dispatch work to execution nodes. The mesh **must** be a direct connection:
+### Key Configuration
+
+**Galaxy Credential Requirement**
+
+Attach an Ansible Galaxy or Automation Hub credential to your AWX organization. Without it, collection sync skips and jobs fail with `couldn't resolve module/action 'community.docker...'`.
+
+**Receptor Topology**
+
+Ensure direct connection from AWX Receptor to execution nodes:
 
 ```
-awx-task ↔ awx-receptor ↔ receptor-execution
+awx-task ↔ awx-receptor ↔ execution-node
 ```
 
-Do **not** relay through a hop node if the hop runs a different Receptor version than the execution node. A version mismatch between the hop and the execution node causes work units to silently fail (jobs complete in ~12 s with zero events and no stdout).
+Do **not** relay through a hop with a different Receptor version.
 
-Both `awx-receptor` and `receptor-execution` must run the same Receptor version (e.g. both from `awx-ee:24.6.1`).
+**Runtime Path**
 
-In `docker-compose.yml`, remove any `tcp-peer: address: receptor-hop:8888` entries from the `awx-task` and `awx-receptor` `RECEPTOR_CONFIG` blocks, and point `receptor-execution`'s peer directly at `awx-receptor:8888`.
-
-### Required Runtime Paths
-
-AWX's periodic `purge_old_stdout_files` task requires `/var/lib/awx/job_status/` to exist inside `awx-task`. If the directory is absent the task crashes on every cycle (visible in `docker logs awx-task`).
-
-Add to the `awx-task` entrypoint:
+AWX's `purge_old_stdout_files` task requires `/var/lib/awx/job_status/` in `awx-task`. Add to the entrypoint:
 
 ```bash
 mkdir -p /var/lib/awx/job_status
 ```
 
-### Execution Order (via AWX)
+### Execution Order
 
-Templates: `piclaw-bootstrap` → `piclaw-openclaw` → `piclaw-verify`
+Run templates in this order:
 
-`piclaw-openclaw` prompts for survey answers (`vault_openclaw_admin_password`, `vault_optional_api_token`).
+1. `piclaw-bootstrap` — OS and runtime setup
+2. `piclaw-openclaw` — Ollama + gateway (surveys: profile, model, provider)
+3. `piclaw-verify` — Validation and smoke tests
 
-## GitHub Automation Included
+See `awx/surveys.yml` for survey question specs and defaults.
 
-- CI workflow for lint + syntax checks:
-	- `.github/workflows/ansible-ci.yml`
-- Weekly scheduled syntax verification workflow:
-	- `.github/workflows/scheduled-verify.yml`
-- PR auto-labeling by changed paths:
-	- `.github/workflows/pr-labeler.yml`
-	- `.github/labeler.yml`
-- Label bootstrap/sync:
-	- `.github/workflows/label-sync.yml`
-	- `.github/labels.yml`
-- Stale issue/PR lifecycle automation:
-	- `.github/workflows/stale.yml`
-- Release draft automation:
-	- `.github/workflows/release-drafter.yml`
-	- `.github/release-drafter.yml`
-- Semantic PR title enforcement (Conventional Commits):
-	- `.github/workflows/semantic-pr.yml`
-- Manual publish of SemVer release from draft:
-	- `.github/workflows/publish-release.yml`
-- OpenSSF Scorecard security posture workflow:
-	- `.github/workflows/scorecard.yml`
-- Dependabot for `pip` and GitHub Actions updates:
-	- `.github/dependabot.yml`
-- PR template and issue templates:
-	- `.github/pull_request_template.md`
-	- `.github/ISSUE_TEMPLATE/bug_report.yml`
-	- `.github/ISSUE_TEMPLATE/feature_request.yml`
-- CODEOWNERS:
-	- `.github/CODEOWNERS`
+## Security & Secrets
 
-## Governance Files
+- **Never commit secrets** to git (passwords, API keys, hostnames)
+- **Vault encryption** available: `ansible-vault encrypt group_vars/pi5.vault.yml`
+- **AWX secrets**: Use survey password fields or credential plugins
+- **API keys** (for external providers): Injected at runtime via environment variables, not in playbooks
 
-- License: Apache-2.0 in `LICENSE`
-- Apache notice file in `NOTICE`
-- Security disclosure guidance in `.github/SECURITY.md`
-- Support guidance in `.github/SUPPORT.md`
-- Issue template config in `.github/ISSUE_TEMPLATE/config.yml`
-- Release note categories in `.github/release.yml`
+For sensitive deployments:
+- Manage inventory in a private repo
+- Use AWX's credential store for API keys
+- Rotate secrets regularly
 
-## SemVer Release Flow
+## GitHub Automation
 
-1. Use Conventional Commit PR titles (for example: `feat: add verify artifact output`, `fix: correct hailo probe check`).
-2. `semantic-pr` workflow validates title format.
-3. `release-drafter` auto-labels and computes next SemVer (`major`/`minor`/`patch`).
-4. Run `publish-release` workflow when ready to publish the drafted release and tag.
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ansible-ci` | PR, push | Lint, syntax check, secret scan |
+| `scheduled-verify` | Weekly | Catch regressions early |
+| `pr-labeler` | PR | Auto-label by changed paths |
+| `label-sync` | Push to main | Sync issue labels from `.github/labels.yml` |
+| `release-drafter` | PR merge | Draft semantic release notes |
+| `publish-release` | Manual | Tag release and publish |
+| `scorecard` | Weekly | OpenSSF security posture |
 
-## What Gets Enforced
+## Contributing
 
-- Base OS packages and upgrades
-- EEPROM update + reboot handling
-- Hailo PCIe detection
-- Hailo runtime installation and checks
-- Hailo Ollama availability and model pull
-- OpenClaw installer execution and provider URL validation
-- Optional sanitizer proxy checks
-- Functional prompt roundtrip checks
+1. **Fork** the repository
+2. **Create a branch** for your feature/fix
+3. **Run quality checks** locally (`pre-commit run --all-files`)
+4. **Test on hardware** if changes affect deployment
+5. **Submit a PR** with a clear, conventional commit title (`feat:`, `fix:`, `chore:`, etc.)
+6. **Request review** from maintainers
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow and PR expectations.
+
+## Support
+
+- **Discussions**: Ask questions in [GitHub Discussions](https://github.com/kpeacocke/piclaw/discussions)
+- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/kpeacocke/piclaw/issues)
+- **Security**: Report vulnerabilities via [GitHub Security Advisories](https://github.com/kpeacocke/piclaw/security/advisories/new) (private)
+
+## License
+
+Licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- Raspberry Pi Foundation (hardware platform)
+- Hailo (NPU hardware and runtime)
+- Ollama (model management)
+- OpenClaw (LLM inference gateway)
+- Ansible (infrastructure automation)

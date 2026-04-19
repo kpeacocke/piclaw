@@ -1,0 +1,8 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+run_full_upgrade: true
+# Enable PCIe Gen 3.0 — required for AI Kit (M.2 slot); not needed for AI HAT+ 2.
+pcie_gen3_enabled: false
+
+# OpenClaw currently requires Node.js >= 22.12.0.
+bootstrap_nodejs_min_version: 22.12.0

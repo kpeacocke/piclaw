@@ -35,6 +35,18 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Is this a regression?
+      description: Did this work in a previous version?
+      options:
+        - "Yes — it worked before"
+        - "No — first time trying"
+        - Unknown
+    validations:
+      required: true
+
   - type: textarea
     id: environment
     attributes:
@@ -43,7 +55,10 @@ body:
         Pi model: Raspberry Pi 5
         OS: Raspberry Pi OS Trixie 64-bit
         AI HAT: AI HAT+ 2 (Hailo-10H)
-        ansible-core version:
+        ansible-core version: (ansible --version)
+        openclaw version: (openclaw --version)
+        node version: (node --version)
+        repo git ref: (git rev-parse --short HEAD)
     validations:
       required: true
 

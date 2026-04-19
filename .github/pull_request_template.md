@@ -8,6 +8,8 @@ What changed and why.
 - [ ] `ansible-playbook --syntax-check playbooks/bootstrap.yml`
 - [ ] `ansible-playbook --syntax-check playbooks/openclaw.yml`
 - [ ] `ansible-playbook --syntax-check playbooks/verify.yml`
+- [ ] `molecule test`
+- [ ] `pytest`
 
 ## Checklist
 
