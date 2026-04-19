@@ -61,20 +61,13 @@
   when: openclaw_use_local_backend | bool
   become: true
 
-- name: Check whether sanitizer proxy script exists
-  ansible.builtin.stat:
-    path: "{{ hailo_proxy_script_path }}"
-  register: openclaw_proxy_script
+- name: Install sanitizer proxy script from project
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../hailo-sanitize-proxy.py"
+    dest: "{{ hailo_proxy_script_path }}"
+    mode: "0755"
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
-
-- name: Fail when sanitizer proxy is enabled but script is missing
-  ansible.builtin.assert:
-    that:
-      - openclaw_proxy_script.stat.exists
-    fail_msg: >-
-      use_sanitizer_proxy is true but {{ hailo_proxy_script_path }} was not found.
-      Install/provision hailo-sanitize-proxy.py first, or set use_sanitizer_proxy=false.
-  when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+  become: true
 
 - name: Install managed sanitizer proxy systemd unit
   ansible.builtin.copy:
@@ -99,7 +92,7 @@
       [Install]
       WantedBy=multi-user.target
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
-  notify: Reload systemd daemon
+  register: openclaw_proxy_unit_file
   become: true
 
 - name: Check whether managed sanitizer proxy service unit exists
@@ -111,7 +104,8 @@
   ansible.builtin.systemd:
     name: "{{ hailo_proxy_service_name }}"
     enabled: true
-    state: started
+    daemon_reload: true
+    state: "{{ 'restarted' if (openclaw_proxy_unit_file.changed | default(false)) else 'started' }}"
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
   become: true
 
@@ -126,7 +120,7 @@
   become: true
 
 - name: Check whether OpenClaw CLI is already installed
-  ansible.builtin.command: command -v openclaw
+  ansible.builtin.command: which openclaw
   register: openclaw_cli_path
   changed_when: false
   failed_when: false
@@ -138,7 +132,7 @@
   become: true
 
 - name: Resolve OpenClaw CLI path
-  ansible.builtin.command: command -v openclaw
+  ansible.builtin.command: which openclaw
   register: openclaw_cli_path_resolved
   changed_when: false
 
@@ -294,14 +288,15 @@
 
       [Install]
       WantedBy=multi-user.target
-  notify: Reload systemd daemon
+  register: openclaw_unit_file
   become: true
 
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
     name: openclaw
     enabled: true
-    state: started
+    daemon_reload: true
+    state: "{{ 'restarted' if openclaw_unit_file.changed else 'started' }}"
   become: true
 
 - name: Gather service facts
