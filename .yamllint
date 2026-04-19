@@ -5,6 +5,7 @@ ignore: |
   .venv/
   venv/
   .github/
+  README.md
 
 rules:
   line-length:
