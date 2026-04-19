@@ -267,7 +267,7 @@
               }
             },
             "sandbox": {
-              "mode": "workspace",
+              "mode": "non-main",
               "rootPath": "~/.openclaw/workspace"
             }
           }
