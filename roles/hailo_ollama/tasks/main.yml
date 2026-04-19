@@ -14,7 +14,7 @@
   become: true
 
 - name: Resolve hailo-ollama binary path
-  ansible.builtin.command: command -v hailo-ollama
+  ansible.builtin.command: which hailo-ollama
   register: hailo_ollama_binary_resolved
   changed_when: false
 
