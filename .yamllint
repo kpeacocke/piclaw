@@ -1,6 +1,11 @@
 ---
 extends: default
 
+ignore: |
+  .venv/
+  venv/
+  .github/
+
 rules:
   line-length:
     max: 160
