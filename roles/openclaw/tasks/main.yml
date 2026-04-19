@@ -328,6 +328,10 @@
       StandardOutput=journal
       StandardError=journal
       SyslogIdentifier=openclaw
+      KillMode=control-group
+      KillSignal=SIGTERM
+      TimeoutStopSec=10
+      SendSIGKILL=yes
 
       [Install]
       WantedBy=multi-user.target
