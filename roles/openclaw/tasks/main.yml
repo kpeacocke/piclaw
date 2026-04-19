@@ -334,6 +334,14 @@
   register: openclaw_unit_file
   become: true
 
+- name: Stop OpenClaw service if already running to ensure clean start
+  ansible.builtin.systemd:
+    name: openclaw
+    state: stopped
+  become: true
+  failed_when: false
+  changed_when: false
+
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
     name: openclaw
