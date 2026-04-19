@@ -394,7 +394,7 @@
   failed_when: false
   retries: 10
   delay: 2
-  until: ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
+  until: ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') == 'running'
   become: true
 
 - name: Capture OpenClaw service logs when not active
@@ -402,16 +402,16 @@
   register: openclaw_service_journal
   changed_when: false
   failed_when: false
-  when: ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') != 'running'
+  when: ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') != 'running'
   become: true
 
 - name: Verify OpenClaw service is active
   ansible.builtin.assert:
     that:
-      - ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
+      - ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') == 'running'
     fail_msg: |-
       openclaw.service did not reach active state after start/retry.
-      service_facts state: {{ ansible_facts.services.get('openclaw.service', {}).get('state', 'unknown') }}
+      service_facts state: {{ ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'unknown') }}
       recent journal:
       {{ openclaw_service_journal.stdout | default('journal unavailable') }}
   become: true
