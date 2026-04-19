@@ -172,9 +172,10 @@
   failed_when: false
   changed_when: false
 
-- name: Stop any stray OpenClaw gateway process
+- name: Release port and kill all stray OpenClaw processes before config update
   ansible.builtin.shell: |
-    pkill -u {{ openclaw_user }} -f 'openclaw-gateway' || true
+    fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
+    pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
   become: true
   changed_when: false
 
@@ -361,9 +362,10 @@
   register: openclaw_unit_file
   become: true
 
-- name: Kill any remaining OpenClaw gateway process before start
+- name: Release port and kill remaining OpenClaw processes before start
   ansible.builtin.shell: |
-    pkill -u {{ openclaw_user }} -f 'openclaw-gateway' || true
+    fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
+    pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
   become: true
   changed_when: false
 
