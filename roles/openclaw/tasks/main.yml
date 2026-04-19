@@ -346,6 +346,10 @@
   failed_when: false
   changed_when: false
 
+- name: Wait for OpenClaw process to fully terminate
+  ansible.builtin.pause:
+    seconds: 2
+
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
     name: openclaw
