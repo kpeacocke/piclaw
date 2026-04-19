@@ -277,18 +277,29 @@
     content: |
       [Unit]
       Description=OpenClaw Gateway
-      After=network-online.target
+      After=network-online.target{% if openclaw_use_local_backend | bool and use_sanitizer_proxy | bool %} {{ hailo_proxy_service_name }}.service{% endif %}{% if openclaw_use_local_backend | bool %} {{ hailo_ollama_service_name }}.service{% endif %}
       Wants=network-online.target
+      {% if openclaw_use_local_backend | bool %}
+      Requires={{ hailo_ollama_service_name }}.service
+      {% endif %}
 
       [Service]
       Type=simple
       User={{ openclaw_user }}
       Group={{ openclaw_user }}
       Environment=HOME={{ openclaw_user_home }}
+      Environment=OPENCLAW_GATEWAY_PORT={{ openclaw_gateway_port }}
+      Environment=OPENCLAW_GATEWAY_BIND={{ openclaw_gateway_bind_host }}
       PassEnvironment={{ openclaw_external_provider_api_key_env }}
+      ExecStartPre=/bin/sleep 2
       ExecStart={{ openclaw_cli_path_resolved }} gateway --port {{ openclaw_gateway_port }} --verbose
       Restart=on-failure
       RestartSec=5
+      StartLimitInterval=60
+      StartLimitBurst=3
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=openclaw
 
       [Install]
       WantedBy=multi-user.target
@@ -303,19 +314,43 @@
     state: "{{ 'restarted' if openclaw_unit_file.changed else 'started' }}"
   become: true
 
-- name: Gather service facts
-  ansible.builtin.service_facts:
+- name: Wait for OpenClaw service to become active
+  ansible.builtin.command: systemctl is-active openclaw.service
+  register: openclaw_service_active
+  changed_when: false
+  failed_when: false
+  retries: 10
+  delay: 2
+  until: (openclaw_service_active.stdout | trim) == 'active'
   become: true
 
-- name: Verify OpenClaw gateway/process is active
+- name: Capture OpenClaw service status when not active
+  ansible.builtin.command: systemctl status openclaw.service --no-pager -l
+  register: openclaw_service_status
+  changed_when: false
+  failed_when: false
+  when: (openclaw_service_active.stdout | trim) != 'active'
+  become: true
+
+- name: Capture OpenClaw service logs when not active
+  ansible.builtin.command: journalctl -u openclaw.service -n 80 --no-pager
+  register: openclaw_service_journal
+  changed_when: false
+  failed_when: false
+  when: (openclaw_service_active.stdout | trim) != 'active'
+  become: true
+
+- name: Verify OpenClaw service is active
   ansible.builtin.assert:
     that:
-      - >-
-        ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
-        or ansible_facts.services.get('openclaw-gateway.service', {}).get('state', 'stopped') == 'running'
-        or ansible_facts.services.get('claw-gateway.service', {}).get('state', 'stopped') == 'running'
-    fail_msg: >-
-      None of openclaw.service, openclaw-gateway.service, or claw-gateway.service are active.
+      - (openclaw_service_active.stdout | trim) == 'active'
+    fail_msg: |-
+      openclaw.service did not reach active state after start/retry.
+      systemctl is-active output: {{ openclaw_service_active.stdout | default('') | trim }}
+      systemctl status:
+      {{ openclaw_service_status.stdout | default('status unavailable') }}
+      recent journal:
+      {{ openclaw_service_journal.stdout | default('journal unavailable') }}
   become: true
 
 - name: Check OpenClaw provider config file exists
@@ -341,7 +376,7 @@
     fail_msg: OpenClaw provider URL does not match {{ openclaw_provider_base_url }}.
 
 - name: Run OpenClaw doctor verification
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved.stdout }} doctor"
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor"
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
@@ -349,7 +384,7 @@
   changed_when: false
 
 - name: Run OpenClaw status verification
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved.stdout }} status --all"
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} status --all"
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
@@ -357,7 +392,7 @@
   changed_when: false
 
 - name: Run OpenClaw health verification
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved.stdout }} health"
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} health"
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
