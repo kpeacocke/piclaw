@@ -56,13 +56,56 @@
     openclaw_node_version_clean: >-
       {{ (openclaw_node_version.stdout | default('v0.0.0') | trim | regex_replace('^v', '')) }}
 
-- name: Verify Node.js satisfies OpenClaw minimum version
+- name: Ensure NodeSource keyrings directory exists when Node.js is too old
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  when: openclaw_node_version_clean is version('22.12.0', '<')
+  become: true
+
+- name: Install NodeSource GPG key when Node.js is too old
+  ansible.builtin.get_url:
+    url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+    dest: /etc/apt/keyrings/nodesource.gpg
+    mode: "0644"
+  when: openclaw_node_version_clean is version('22.12.0', '<')
+  become: true
+
+- name: Configure NodeSource Node.js 22 repository when Node.js is too old
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main"
+    filename: nodesource
+    state: present
+  when: openclaw_node_version_clean is version('22.12.0', '<')
+  become: true
+
+- name: Ensure Node.js is upgraded to required version when too old
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+  when: openclaw_node_version_clean is version('22.12.0', '<')
+  become: true
+
+- name: Re-check installed Node.js version
+  ansible.builtin.command: node --version
+  register: openclaw_node_version
+  changed_when: false
+  failed_when: false
+
+- name: Re-normalize Node.js version string
+  ansible.builtin.set_fact:
+    openclaw_node_version_clean: >-
+      {{ (openclaw_node_version.stdout | default('v0.0.0') | trim | regex_replace('^v', '')) }}
+
+- name: Verify Node.js satisfies OpenClaw minimum version after fallback install
   ansible.builtin.assert:
     that:
       - openclaw_node_version_clean is version('22.12.0', '>=')
     fail_msg: >-
-      OpenClaw requires Node.js >= 22.12.0, but found {{ openclaw_node_version.stdout | default('unknown') }}.
-      Run the bootstrap playbook first to provision the required runtime.
+      OpenClaw requires Node.js >= 22.12.0, but found {{ openclaw_node_version.stdout | default('unknown') }}
+      even after attempting fallback runtime installation.
 
 - name: Check npm version
   ansible.builtin.command: npm --version
