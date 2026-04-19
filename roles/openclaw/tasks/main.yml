@@ -45,13 +45,6 @@
       openclaw_external_provider_api_key_env must be a valid environment variable name.
   when: not (openclaw_use_local_backend | bool)
 
-- name: Ensure OpenClaw prerequisites are installed
-  ansible.builtin.apt:
-    name:
-      - npm
-    state: present
-  become: true
-
 - name: Check installed Node.js version
   ansible.builtin.command: node --version
   register: openclaw_node_version
@@ -70,6 +63,19 @@
     fail_msg: >-
       OpenClaw requires Node.js >= 22.12.0, but found {{ openclaw_node_version.stdout | default('unknown') }}.
       Run the bootstrap playbook first to provision the required runtime.
+
+- name: Check npm version
+  ansible.builtin.command: npm --version
+  register: openclaw_npm_version
+  changed_when: false
+  failed_when: false
+
+- name: Verify npm is available
+  ansible.builtin.assert:
+    that:
+      - openclaw_npm_version.rc == 0
+    fail_msg: >-
+      npm is not available on the host. Install Node.js via bootstrap so npm is provisioned with nodejs.
 
 - name: Ensure Hailo Ollama service is active
   ansible.builtin.systemd:
