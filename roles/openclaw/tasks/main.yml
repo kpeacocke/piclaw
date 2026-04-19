@@ -48,10 +48,28 @@
 - name: Ensure OpenClaw prerequisites are installed
   ansible.builtin.apt:
     name:
-      - nodejs
       - npm
     state: present
   become: true
+
+- name: Check installed Node.js version
+  ansible.builtin.command: node --version
+  register: openclaw_node_version
+  changed_when: false
+  failed_when: false
+
+- name: Normalize Node.js version string
+  ansible.builtin.set_fact:
+    openclaw_node_version_clean: >-
+      {{ (openclaw_node_version.stdout | default('v0.0.0') | trim | regex_replace('^v', '')) }}
+
+- name: Verify Node.js satisfies OpenClaw minimum version
+  ansible.builtin.assert:
+    that:
+      - openclaw_node_version_clean is version('22.12.0', '>=')
+    fail_msg: >-
+      OpenClaw requires Node.js >= 22.12.0, but found {{ openclaw_node_version.stdout | default('unknown') }}.
+      Run the bootstrap playbook first to provision the required runtime.
 
 - name: Ensure Hailo Ollama service is active
   ansible.builtin.systemd:
@@ -277,7 +295,13 @@
     content: |
       [Unit]
       Description=OpenClaw Gateway
-      After=network-online.target{% if openclaw_use_local_backend | bool and use_sanitizer_proxy | bool %} {{ hailo_proxy_service_name }}.service{% endif %}{% if openclaw_use_local_backend | bool %} {{ hailo_ollama_service_name }}.service{% endif %}
+      After=network-online.target
+      {% if openclaw_use_local_backend | bool and use_sanitizer_proxy | bool %}
+      After={{ hailo_proxy_service_name }}.service
+      {% endif %}
+      {% if openclaw_use_local_backend | bool %}
+      After={{ hailo_ollama_service_name }}.service
+      {% endif %}
       Wants=network-online.target
       {% if openclaw_use_local_backend | bool %}
       Requires={{ hailo_ollama_service_name }}.service
@@ -315,21 +339,13 @@
   become: true
 
 - name: Wait for OpenClaw service to become active
-  ansible.builtin.command: systemctl is-active openclaw.service
-  register: openclaw_service_active
+  ansible.builtin.service_facts:
+  register: openclaw_service_facts
   changed_when: false
   failed_when: false
   retries: 10
   delay: 2
-  until: (openclaw_service_active.stdout | trim) == 'active'
-  become: true
-
-- name: Capture OpenClaw service status when not active
-  ansible.builtin.command: systemctl status openclaw.service --no-pager -l
-  register: openclaw_service_status
-  changed_when: false
-  failed_when: false
-  when: (openclaw_service_active.stdout | trim) != 'active'
+  until: ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
   become: true
 
 - name: Capture OpenClaw service logs when not active
@@ -337,18 +353,16 @@
   register: openclaw_service_journal
   changed_when: false
   failed_when: false
-  when: (openclaw_service_active.stdout | trim) != 'active'
+  when: ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') != 'running'
   become: true
 
 - name: Verify OpenClaw service is active
   ansible.builtin.assert:
     that:
-      - (openclaw_service_active.stdout | trim) == 'active'
+      - ansible_facts.services.get('openclaw.service', {}).get('state', 'stopped') == 'running'
     fail_msg: |-
       openclaw.service did not reach active state after start/retry.
-      systemctl is-active output: {{ openclaw_service_active.stdout | default('') | trim }}
-      systemctl status:
-      {{ openclaw_service_status.stdout | default('status unavailable') }}
+      service_facts state: {{ ansible_facts.services.get('openclaw.service', {}).get('state', 'unknown') }}
       recent journal:
       {{ openclaw_service_journal.stdout | default('journal unavailable') }}
   become: true
