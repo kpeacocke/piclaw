@@ -91,7 +91,7 @@
       User={{ openclaw_user }}
       Group={{ openclaw_user }}
       Environment=HOME={{ openclaw_user_home }}
-      Environment=HAILO_MODEL={{ hailo_model }}
+      Environment=HAILO_MODEL={{ openclaw_selected_model }}
       ExecStart=/usr/bin/python3 {{ hailo_proxy_script_path }}
       Restart=on-failure
       RestartSec=5

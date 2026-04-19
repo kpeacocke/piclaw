@@ -84,7 +84,9 @@
     body_format: json
     body:
       model: "{{ hailo_model }}"
+      stream: false
     status_code: 200
+    return_content: true
     timeout: 1800
   register: hailo_pull
 
@@ -96,11 +98,30 @@
     status_code: 200
   register: hailo_tags
 
+- name: Capture available Hailo model tags
+  ansible.builtin.set_fact:
+    hailo_available_models: "{{ hailo_tags.json.models | default([]) | map(attribute='name') | list }}"
+
+- name: Resolve Hailo runtime model tag
+  ansible.builtin.set_fact:
+    hailo_runtime_model: >-
+      {{
+        (hailo_available_models | select('equalto', hailo_model) | list | first)
+        | default(
+            (hailo_available_models
+             | select('match', '^(' ~ (hailo_model | regex_escape) ~ '|.*/' ~ (hailo_model | regex_escape) ~ ')([._-].*)?$')
+             | list | first),
+            true
+          )
+      }}
+
 - name: Assert selected model is present
   ansible.builtin.assert:
     that:
-      - (hailo_tags.json.models | default([]) | map(attribute='name') | list) is contains(hailo_model)
-    fail_msg: "Model {{ hailo_model }} was not found in /api/tags."
+      - (hailo_runtime_model | default('') | length) > 0
+    fail_msg: >-
+      Model {{ hailo_model }} was not found in /api/tags.
+      Available tags: {{ hailo_available_models | join(', ') if (hailo_available_models | length > 0) else 'none' }}
 
 - name: Perform chat smoke test against local backend
   ansible.builtin.uri:
@@ -108,7 +129,7 @@
     method: POST
     body_format: json
     body:
-      model: "{{ hailo_model }}"
+      model: "{{ hailo_runtime_model }}"
       stream: false
       messages:
         - role: user

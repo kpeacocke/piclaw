@@ -50,8 +50,8 @@
 - name: Assert selected model appears in tags
   ansible.builtin.assert:
     that:
-      - (validate_tags.json.models | default([]) | map(attribute='name') | list) is contains(hailo_model)
-    fail_msg: "Model {{ hailo_model }} not found in backend tags."
+      - (validate_tags.json.models | default([]) | map(attribute='name') | list) is contains(hailo_runtime_model | default(hailo_model))
+    fail_msg: "Model {{ hailo_runtime_model | default(hailo_model) }} not found in backend tags."
   when: openclaw_use_local_backend | bool
 
 - name: Validate proxy endpoint when enabled
@@ -143,7 +143,7 @@
     method: POST
     body_format: json
     body:
-      model: "{{ hailo_model }}"
+      model: "{{ hailo_runtime_model | default(hailo_model) }}"
       stream: false
       messages:
         - role: user

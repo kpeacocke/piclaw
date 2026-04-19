@@ -23,7 +23,7 @@ openclaw_provider_name: >-
 openclaw_provider_api: >-
   {{ 'openai-completions' if openclaw_use_local_backend | bool else openclaw_external_provider_api }}
 openclaw_selected_model: >-
-  {{ hailo_model if openclaw_use_local_backend | bool else openclaw_external_provider_model }}
+  {{ (hailo_runtime_model | default(hailo_model)) if openclaw_use_local_backend | bool else openclaw_external_provider_model }}
 openclaw_provider_base_url: >-
   {{
     ('http://127.0.0.1:' ~ proxy_port ~ '/v1')
