@@ -10,10 +10,14 @@
     "python.analysis.typeCheckingMode": "strict",
     "python.analysis.diagnosticMode": "workspace",
     "files.exclude": {
-        "**/.venv": true
+        "**/.venv": true,
+        "**/__pycache__": true,
+        "**/node_modules": true
     },
     "search.exclude": {
-        "**/.venv": true
+        "**/.venv": true,
+        "**/__pycache__": true,
+        "**/node_modules": true
     },
     "files.watcherExclude": {
         "**/.venv/**": true,
