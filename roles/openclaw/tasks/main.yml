@@ -164,6 +164,29 @@
   ansible.builtin.set_fact:
     openclaw_cli_path_resolved: "{{ openclaw_cli_path_resolved.stdout | trim }}"
 
+- name: Stop OpenClaw service before config update
+  ansible.builtin.systemd:
+    name: openclaw
+    state: stopped
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Stop any stray OpenClaw gateway process
+  ansible.builtin.shell: |
+    pkill -u {{ openclaw_user }} -f 'openclaw-gateway' || true
+  become: true
+  changed_when: false
+
+- name: Remove stale OpenClaw user config and backup
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - "{{ openclaw_user_config_path }}"
+    - "{{ openclaw_user_config_path }}.bak"
+
 - name: Ensure OpenClaw user config directory exists
   ansible.builtin.file:
     path: "{{ openclaw_user_config_dir }}"
@@ -338,17 +361,11 @@
   register: openclaw_unit_file
   become: true
 
-- name: Stop OpenClaw service if already running to ensure clean start
-  ansible.builtin.systemd:
-    name: openclaw
-    state: stopped
+- name: Kill any remaining OpenClaw gateway process before start
+  ansible.builtin.shell: |
+    pkill -u {{ openclaw_user }} -f 'openclaw-gateway' || true
   become: true
-  failed_when: false
   changed_when: false
-
-- name: Wait for OpenClaw process to fully terminate
-  ansible.builtin.pause:
-    seconds: 2
 
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
