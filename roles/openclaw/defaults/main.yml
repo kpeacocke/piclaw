@@ -55,3 +55,25 @@ openclaw_primary_model_ref: "{{ openclaw_provider_name }}/{{ openclaw_selected_m
 hailo_ollama_service_name: hailo-ollama
 hailo_proxy_service_name: hailo-sanitize-proxy
 hailo_proxy_script_path: /usr/local/bin/hailo-sanitize-proxy.py
+hailo_proxy_listen_host: 0.0.0.0
+hailo_proxy_allowed_origins: "http://localhost:8787,http://127.0.0.1:8787"
+hailo_proxy_allowed_origin_prefixes: "http://192.168.1.,https://192.168.1."
+hailo_proxy_allowed_hosts: >-
+  {{
+    (
+      [
+        '127.0.0.1:' ~ proxy_port,
+        'localhost:' ~ proxy_port,
+        '[::1]:' ~ proxy_port,
+        '127.0.0.1',
+        'localhost',
+        '[::1]'
+      ]
+      +
+      (
+        [ansible_default_ipv4.address ~ ':' ~ proxy_port, ansible_default_ipv4.address]
+        if (ansible_default_ipv4 is defined and ansible_default_ipv4.address is defined)
+        else []
+      )
+    ) | unique | join(',')
+  }}

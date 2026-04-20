@@ -109,6 +109,10 @@
       Group={{ openclaw_user }}
       Environment=HOME={{ openclaw_user_home }}
       Environment=HAILO_MODEL={{ openclaw_selected_model }}
+      Environment=HAILO_PROXY_LISTEN_HOST={{ hailo_proxy_listen_host }}
+      Environment=HAILO_PROXY_ALLOWED_HOSTS={{ hailo_proxy_allowed_hosts }}
+      Environment=HAILO_PROXY_ALLOWED_ORIGINS={{ hailo_proxy_allowed_origins }}
+      Environment=HAILO_PROXY_ALLOWED_ORIGIN_PREFIXES={{ hailo_proxy_allowed_origin_prefixes }}
       ExecStart=/usr/bin/python3 {{ hailo_proxy_script_path }}
       Restart=on-failure
       RestartSec=5

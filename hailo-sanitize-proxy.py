@@ -44,6 +44,11 @@ CORS_ALLOWED_ORIGINS = {
     ).split(",")
     if item.strip()
 }
+CORS_ALLOWED_ORIGIN_PREFIXES = [
+    item.strip()
+    for item in os.environ.get("HAILO_PROXY_ALLOWED_ORIGIN_PREFIXES", "").split(",")
+    if item.strip()
+]
 CORS_ALLOW_NO_ORIGIN = os.environ.get(
     "HAILO_PROXY_ALLOW_NO_ORIGIN", "1"
 ).strip().lower() not in {"0", "false", "no", "off"}
@@ -1012,7 +1017,9 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def _is_origin_allowed(self, origin):
         if not origin:
             return CORS_ALLOW_NO_ORIGIN
-        return origin in CORS_ALLOWED_ORIGINS
+        if origin in CORS_ALLOWED_ORIGINS:
+            return True
+        return any(origin.startswith(prefix) for prefix in CORS_ALLOWED_ORIGIN_PREFIXES)
 
     def _is_host_allowed(self, host):
         if not host:
