@@ -29,6 +29,7 @@ import urllib.parse
 import urllib.request
 
 LISTEN_PORT = 8081
+LISTEN_HOST = os.environ.get("HAILO_PROXY_LISTEN_HOST", "0.0.0.0")
 UPSTREAM = "http://127.0.0.1:8000"
 DEFAULT_MODEL_ID = os.environ.get("HAILO_MODEL", "qwen2:1.5b")
 WORKSPACE_SKILLS_DIR = os.path.expanduser("~/.openclaw/workspace/skills")
@@ -55,7 +56,7 @@ ALLOWED_HOSTS = {
     item.strip().lower()
     for item in os.environ.get(
         "HAILO_PROXY_ALLOWED_HOSTS",
-        "127.0.0.1:8081,localhost:8081,[::1]:8081,127.0.0.1,localhost,[::1]",
+        "127.0.0.1:8081,localhost:8081,[::1]:8081,127.0.0.1,localhost,[::1],192.168.1.254:8081,192.168.1.254",
     ).split(",")
     if item.strip()
 }
@@ -1352,11 +1353,11 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
 
 def main():
     _ensure_trace_dir()
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", LISTEN_PORT), ProxyHandler)
+    server = http.server.ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), ProxyHandler)
     server.daemon_threads = True
     print(
-        "hailo-sanitize-proxy: listening on 127.0.0.1:%d -> %s"
-        % (LISTEN_PORT, UPSTREAM),
+        "hailo-sanitize-proxy: listening on %s:%d -> %s"
+        % (LISTEN_HOST, LISTEN_PORT, UPSTREAM),
         flush=True,
     )
     try:
