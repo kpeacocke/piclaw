@@ -984,6 +984,20 @@ def fake_v1_model(model_id):
     ).encode("utf-8")
 
 
+def fake_v1_root():
+    return json.dumps(
+        {
+            "object": "api",
+            "version": "v1",
+            "endpoints": [
+                "/v1/models",
+                "/v1/chat/completions",
+                "/v1/completions",
+            ],
+        }
+    ).encode("utf-8")
+
+
 class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self._proxy("GET")
@@ -1111,6 +1125,18 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, resp_body)
             sys.stderr.write(
                 "hailo-sanitize-proxy[%s]: %s %s -> 200 faked duration_ms=%d\n"
+                % (trace_id, method, path, int((time.time() - started) * 1000))
+            )
+            sys.stderr.flush()
+            return
+
+        # OpenAI-compatible model discovery for clients (Nanobot, Moltis, etc.)
+        if path == "/v1" and method == "GET":
+            resp_body = fake_v1_root()
+            _write_trace(trace_id, "proxy-response.fake-v1-root", resp_body)
+            self._send_json(200, resp_body)
+            sys.stderr.write(
+                "hailo-sanitize-proxy[%s]: %s %s -> 200 faked v1 root duration_ms=%d\n"
                 % (trace_id, method, path, int((time.time() - started) * 1000))
             )
             sys.stderr.flush()
