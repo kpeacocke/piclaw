@@ -91,6 +91,7 @@
     dest: "{{ hailo_proxy_script_path }}"
     mode: "0755"
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
+  register: openclaw_proxy_script_file
   become: true
 
 - name: Install managed sanitizer proxy systemd unit
@@ -133,7 +134,7 @@
     name: "{{ hailo_proxy_service_name }}"
     enabled: true
     daemon_reload: true
-    state: "{{ 'restarted' if (openclaw_proxy_unit_file.changed | default(false)) else 'started' }}"
+    state: "{{ 'restarted' if ((openclaw_proxy_unit_file.changed | default(false)) or (openclaw_proxy_script_file.changed | default(false))) else 'started' }}"
   when: openclaw_use_local_backend | bool and use_sanitizer_proxy | bool
   become: true
 
