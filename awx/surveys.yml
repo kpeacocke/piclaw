@@ -30,6 +30,19 @@ surveys:
           - "true"
           - "false"
         default: "true"
+      - variable: openclaw_no_respawn
+        type: multiplechoice
+        question: Disable OpenClaw self-respawn (recommended on low-power hosts)
+        required: true
+        choices:
+          - "true"
+          - "false"
+        default: "true"
+      - variable: openclaw_node_compile_cache_dir
+        type: text
+        question: Node compile cache directory for OpenClaw
+        required: true
+        default: /var/tmp/openclaw-compile-cache
       - variable: openclaw_external_provider_name
         type: text
         question: External provider name (used by external-power)

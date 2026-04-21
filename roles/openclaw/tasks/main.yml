@@ -322,6 +322,15 @@
   no_log: true
   become: true
 
+- name: Ensure OpenClaw Node compile cache directory exists
+  ansible.builtin.file:
+    path: "{{ openclaw_node_compile_cache_dir }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: "0755"
+  become: true
+
 - name: Install OpenClaw systemd unit
   ansible.builtin.copy:
     dest: /etc/systemd/system/openclaw.service
@@ -348,6 +357,8 @@
       Environment=HOME={{ openclaw_user_home }}
       Environment=OPENCLAW_GATEWAY_PORT={{ openclaw_gateway_port }}
       Environment=OPENCLAW_GATEWAY_BIND={{ openclaw_gateway_bind_host }}
+      Environment=NODE_COMPILE_CACHE={{ openclaw_node_compile_cache_dir }}
+      Environment=OPENCLAW_NO_RESPAWN={{ 1 if (openclaw_no_respawn | bool) else 0 }}
       PassEnvironment={{ openclaw_external_provider_api_key_env }}
       ExecStart={{ openclaw_cli_path_resolved }} gateway --port {{ openclaw_gateway_port }} --verbose
       Restart=on-failure
@@ -433,12 +444,25 @@
       - (openclaw_cfg_content.content | b64decode) is search(openclaw_provider_base_url)
     fail_msg: OpenClaw provider URL does not match {{ openclaw_provider_base_url }}.
 
+- name: Run OpenClaw doctor auto-fix
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor --fix"
+  become: true
+  become_user: "{{ openclaw_user }}"
+  environment:
+    HOME: "{{ openclaw_user_home }}"
+    NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
+    OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
+  changed_when: false
+  when: openclaw_doctor_auto_fix | bool
+
 - name: Run OpenClaw doctor verification
   ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor"
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
     HOME: "{{ openclaw_user_home }}"
+    NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
+    OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
   changed_when: false
 
 - name: Run OpenClaw status verification
@@ -447,6 +471,8 @@
   become_user: "{{ openclaw_user }}"
   environment:
     HOME: "{{ openclaw_user_home }}"
+    NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
+    OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
   changed_when: false
 
 - name: Run OpenClaw health verification
@@ -455,4 +481,6 @@
   become_user: "{{ openclaw_user }}"
   environment:
     HOME: "{{ openclaw_user_home }}"
+    NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
+    OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
   changed_when: false
