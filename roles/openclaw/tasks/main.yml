@@ -443,13 +443,15 @@
   become: true
 
 - name: Wait for OpenClaw service to become active
-  ansible.builtin.command: systemctl is-active openclaw
+  ansible.builtin.systemd_service:
+    name: openclaw
+    state: started
   register: openclaw_service_state
   changed_when: false
   failed_when: false
   retries: 15
   delay: 2
-  until: (openclaw_service_state.stdout | default('') | trim) == 'active'
+  until: (openclaw_service_state.status.ActiveState | default('inactive')) == 'active'
   become: true
 
 - name: Capture OpenClaw service logs when not active
@@ -458,16 +460,16 @@
   register: openclaw_service_journal
   changed_when: false
   failed_when: false
-  when: (openclaw_service_state.stdout | default('') | trim) != 'active'
+  when: (openclaw_service_state.status.ActiveState | default('inactive')) != 'active'
   become: true
 
 - name: Verify OpenClaw service is active
   ansible.builtin.assert:
     that:
-      - (openclaw_service_state.stdout | default('') | trim) == 'active'
+      - (openclaw_service_state.status.ActiveState | default('inactive')) == 'active'
     fail_msg: |-
       openclaw.service did not reach active state after start/retry.
-      systemctl state: {{ openclaw_service_state.stdout | default('unknown') | trim }}
+      systemd ActiveState: {{ openclaw_service_state.status.ActiveState | default('unknown') }}
       recent journal excerpt captured in prior task.
   become: true
 
