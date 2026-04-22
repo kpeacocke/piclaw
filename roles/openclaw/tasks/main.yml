@@ -220,7 +220,8 @@
     content: |
       {
         "gateway": {
-          "mode": "local"
+          "mode": "local",
+          "trustedProxies": {{ openclaw_gateway_trusted_proxies | to_json }}
         },
         "models": {
           "providers": {
@@ -253,9 +254,12 @@
               }
             },
             "sandbox": {
-              "mode": "non-main"
+              "mode": "{{ openclaw_sandbox_mode }}"
             }
           }
+        },
+        "tools": {
+          "deny": {{ openclaw_tools_deny | to_json }}
         },
         "plugins": {
           "allow": ["nextcloud-talk"]
@@ -280,6 +284,23 @@
     that:
       - (openclaw_user_cfg_content.content | b64decode) is search(openclaw_primary_model_ref)
     fail_msg: OpenClaw user config does not include expected primary model {{ openclaw_primary_model_ref }}.
+
+- name: Parse OpenClaw user config JSON
+  ansible.builtin.set_fact:
+    openclaw_user_cfg_json: "{{ openclaw_user_cfg_content.content | b64decode | from_json }}"
+
+- name: Verify OpenClaw user sandbox mode is configured
+  ansible.builtin.assert:
+    that:
+      - openclaw_user_cfg_json.agents.defaults.sandbox.mode == openclaw_sandbox_mode
+    fail_msg: OpenClaw user config does not include expected sandbox mode {{ openclaw_sandbox_mode }}.
+
+- name: Verify OpenClaw user denied tools are configured
+  ansible.builtin.assert:
+    that:
+      - "'group:web' in openclaw_user_cfg_json.tools.deny"
+      - "'browser' in openclaw_user_cfg_json.tools.deny"
+    fail_msg: OpenClaw user config does not include required denied web tools.
 
 - name: Write OpenClaw auth profiles
   ansible.builtin.copy:

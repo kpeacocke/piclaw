@@ -50,6 +50,13 @@ openclaw_auth_profiles_path: "{{ openclaw_user_config_dir }}/agents/main/agent/a
 openclaw_gateway_port: 18789
 openclaw_gateway_bind_host: 127.0.0.1
 openclaw_gateway_auth_mode: none
+openclaw_gateway_trusted_proxies:
+  - 127.0.0.1
+  - ::1
+openclaw_sandbox_mode: all
+openclaw_tools_deny:
+  - group:web
+  - browser
 openclaw_no_respawn: true
 openclaw_node_compile_cache_dir: /var/tmp/openclaw-compile-cache
 openclaw_doctor_auto_fix: true
