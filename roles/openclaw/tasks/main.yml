@@ -177,6 +177,13 @@
   failed_when: false
   changed_when: false
 
+- name: Kill orphaned openclaw-gateway subprocesses after service stop
+  ansible.builtin.shell: |
+    pkill -9 -f 'openclaw-gateway' 2>/dev/null || true
+    fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
+  become: true
+  changed_when: false
+
 - name: Check for stale OpenClaw lock files during config update
   ansible.builtin.find:
     paths:
@@ -420,33 +427,12 @@
   register: openclaw_unit_file
   become: true
 
-- name: Check for stale OpenClaw lock files
-  ansible.builtin.find:
-    paths:
-      - "{{ openclaw_user_home }}/.openclaw"
-      - "/tmp"
-    patterns:
-      - ".lock*"
-      - "lock"
-      - "openclaw*"
-    file_type: file
-  register: openclaw_stale_locks
-  become: true
-  changed_when: false
-  failed_when: false
-
-- name: Clean up stale OpenClaw lock files if detected
+- name: Kill orphaned openclaw-gateway subprocesses before start
   ansible.builtin.shell: |
+    pkill -9 -f 'openclaw-gateway' 2>/dev/null || true
     fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
-    pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
-    rm -f {{ openclaw_user_home }}/.openclaw/.lock* 2>/dev/null || true
-    rm -f {{ openclaw_user_home }}/.openclaw/lock 2>/dev/null || true
-    rm -f /run/openclaw.pid 2>/dev/null || true
-    rm -f /tmp/openclaw* 2>/dev/null || true
-    rm -f /tmp/.openclaw* 2>/dev/null || true
   become: true
   changed_when: false
-  when: openclaw_stale_locks.matched > 0
 
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
