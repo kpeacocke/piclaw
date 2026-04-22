@@ -179,7 +179,7 @@
 
 - name: Kill orphaned openclaw-gateway subprocesses after service stop
   ansible.builtin.shell: |
-    pkill -9 -f 'openclaw-gateway' 2>/dev/null || true
+    pkill -9 -x openclaw-gateway 2>/dev/null || true
     fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
   become: true
   changed_when: false
@@ -429,7 +429,7 @@
 
 - name: Kill orphaned openclaw-gateway subprocesses before start
   ansible.builtin.shell: |
-    pkill -9 -f 'openclaw-gateway' 2>/dev/null || true
+    pkill -9 -x openclaw-gateway 2>/dev/null || true
     fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
   become: true
   changed_when: false
