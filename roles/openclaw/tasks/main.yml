@@ -443,32 +443,32 @@
   become: true
 
 - name: Wait for OpenClaw service to become active
-  ansible.builtin.service_facts:
-  register: openclaw_service_facts
+  ansible.builtin.command: systemctl is-active openclaw
+  register: openclaw_service_state
   changed_when: false
   failed_when: false
-  retries: 10
+  retries: 15
   delay: 2
-  until: ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') == 'running'
+  until: (openclaw_service_state.stdout | default('') | trim) == 'active'
   become: true
 
 - name: Capture OpenClaw service logs when not active
-  ansible.builtin.command: journalctl -u openclaw.service -n 80 --no-pager
+  ansible.builtin.shell: |
+    journalctl -u openclaw.service -n 60 --no-pager --output=short-monotonic | tail -n 20
   register: openclaw_service_journal
   changed_when: false
   failed_when: false
-  when: ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') != 'running'
+  when: (openclaw_service_state.stdout | default('') | trim) != 'active'
   become: true
 
 - name: Verify OpenClaw service is active
   ansible.builtin.assert:
     that:
-      - ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'stopped') == 'running'
+      - (openclaw_service_state.stdout | default('') | trim) == 'active'
     fail_msg: |-
       openclaw.service did not reach active state after start/retry.
-      service_facts state: {{ ansible_facts.get('services', {}).get('openclaw.service', {}).get('state', 'unknown') }}
-      recent journal:
-      {{ openclaw_service_journal.stdout | default('journal unavailable') }}
+      systemctl state: {{ openclaw_service_state.stdout | default('unknown') | trim }}
+      recent journal excerpt captured in prior task.
   become: true
 
 - name: Check OpenClaw provider config file exists
