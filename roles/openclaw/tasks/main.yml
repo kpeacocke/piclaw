@@ -177,15 +177,25 @@
   failed_when: false
   changed_when: false
 
-- name: Release port and kill all stray OpenClaw processes before config update
+- name: Check for stale OpenClaw lock files during config update
+  ansible.builtin.find:
+    paths:
+      - "{{ openclaw_user_home }}/.openclaw"
+      - "/tmp"
+    patterns:
+      - ".lock*"
+      - "lock"
+      - "openclaw*"
+    file_type: file
+  register: openclaw_stale_locks_config
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Clean up stale lock files during config update if needed
   ansible.builtin.shell: |
     fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
     pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
-  become: true
-  changed_when: false
-
-- name: Clean up stale OpenClaw lock files during config update
-  ansible.builtin.shell: |
     rm -f {{ openclaw_user_home }}/.openclaw/.lock* 2>/dev/null || true
     rm -f {{ openclaw_user_home }}/.openclaw/lock 2>/dev/null || true
     rm -f /run/openclaw.pid 2>/dev/null || true
@@ -193,6 +203,7 @@
     rm -f /tmp/.openclaw* 2>/dev/null || true
   become: true
   changed_when: false
+  when: openclaw_stale_locks_config.matched > 0
 
 - name: Remove stale OpenClaw user config and backup
   ansible.builtin.file:
@@ -409,15 +420,25 @@
   register: openclaw_unit_file
   become: true
 
-- name: Release port and kill remaining OpenClaw processes before start
+- name: Check for stale OpenClaw lock files
+  ansible.builtin.find:
+    paths:
+      - "{{ openclaw_user_home }}/.openclaw"
+      - "/tmp"
+    patterns:
+      - ".lock*"
+      - "lock"
+      - "openclaw*"
+    file_type: file
+  register: openclaw_stale_locks
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Clean up stale OpenClaw lock files if detected
   ansible.builtin.shell: |
     fuser -k {{ openclaw_gateway_port }}/tcp 2>/dev/null || true
     pkill -9 -u {{ openclaw_user }} -f 'openclaw' 2>/dev/null || true
-  become: true
-  changed_when: false
-
-- name: Clean up stale OpenClaw lock files and state
-  ansible.builtin.shell: |
     rm -f {{ openclaw_user_home }}/.openclaw/.lock* 2>/dev/null || true
     rm -f {{ openclaw_user_home }}/.openclaw/lock 2>/dev/null || true
     rm -f /run/openclaw.pid 2>/dev/null || true
@@ -425,6 +446,7 @@
     rm -f /tmp/.openclaw* 2>/dev/null || true
   become: true
   changed_when: false
+  when: openclaw_stale_locks.matched > 0
 
 - name: Ensure OpenClaw service is enabled and started
   ansible.builtin.systemd:
