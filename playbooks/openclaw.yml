@@ -5,6 +5,18 @@
   gather_facts: true
   become: true
 
+  pre_tasks:
+    - name: Verify Tailscale is active and healthy
+      ansible.builtin.systemd:
+        name: tailscaled
+      register: tailscale_status
+
+    - name: Assert Tailscale daemon is active
+      ansible.builtin.assert:
+        that:
+          - tailscale_status.status.ActiveState == 'active'
+        fail_msg: "Tailscale daemon is not active. Run bootstrap playbook first to set up Tailscale mesh VPN."
+
   roles:
     - role: docker
     - role: hailo_ollama

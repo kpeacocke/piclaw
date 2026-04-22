@@ -1,0 +1,139 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+
+- name: Validate Tailscale auth key is provided
+  ansible.builtin.assert:
+    that:
+      - tailscale_auth_key | trim | length > 0
+    fail_msg: "tailscale_auth_key must be set. Obtain a reusable auth key from https://login.tailscale.com/admin/settings/keys"
+
+- name: Add Tailscale package repository key
+  ansible.builtin.apt_key:
+    url: https://pkgs.tailscale.com/stable/ubuntu/focal.gpg
+    state: present
+  register: tailscale_repo_key
+  retries: 3
+  delay: 5
+  until: tailscale_repo_key is succeeded
+
+- name: Add Tailscale package repository
+  ansible.builtin.apt_repository:
+    repo: deb https://pkgs.tailscale.com/stable/ubuntu focal main
+    state: present
+    filename: tailscale
+  register: tailscale_repo
+  retries: 3
+  delay: 5
+  until: tailscale_repo is succeeded
+
+- name: Update apt cache for Tailscale packages
+  ansible.builtin.apt:
+    update_cache: true
+  register: tailscale_apt_update
+  retries: 3
+  delay: 5
+  until: tailscale_apt_update is succeeded
+
+- name: Install Tailscale daemon and CLI
+  ansible.builtin.apt:
+    name:
+      - tailscale
+    state: present
+  register: tailscale_install
+  retries: 3
+  delay: 5
+  until: tailscale_install is succeeded
+
+- name: Ensure Tailscale daemon is enabled on boot
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}"
+    daemon_reload: true
+    enabled: true
+  register: tailscale_daemon_enabled
+  become: true
+
+- name: Start Tailscale daemon
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}"
+    state: started
+  register: tailscale_daemon_started
+  become: true
+  retries: 3
+  delay: 5
+  until: tailscale_daemon_started is succeeded
+
+- name: Wait for Tailscale daemon to be ready
+  ansible.builtin.pause:
+    seconds: 3
+
+- name: Check Tailscale daemon socket availability
+  ansible.builtin.wait_for:
+    path: /var/run/tailscale/tailscaled.sock
+    timeout: "{{ tailscale_health_check_timeout }}"
+  become: true
+
+- name: Build Tailscale authentication command
+  ansible.builtin.set_fact:
+    tailscale_auth_cmd: >-
+      {{ tailscale_cli_bin }} up
+      --auth-key={{ tailscale_auth_key }}
+      --hostname={{ tailscale_device_name }}
+      {% if tailscale_accept_dns %}--accept-dns{% else %}--accept-dns=false{% endif %}
+      {% if tailscale_advertise_routes %}--advertise-routes=192.168.0.0/16{% endif %}
+      {% if tailscale_advertise_exit_node %}--advertise-exit-node{% endif %}
+
+- name: Authenticate with Tailscale network
+  ansible.builtin.shell:
+    cmd: "{{ tailscale_auth_cmd }}"
+  register: tailscale_auth_result
+  retries: "{{ tailscale_start_retries }}"
+  delay: "{{ tailscale_start_retry_delay }}"
+  until: >-
+    tailscale_auth_result.rc == 0 or
+    'already authenticated' in tailscale_auth_result.stdout or
+    'already authenticated' in tailscale_auth_result.stderr
+  become: true
+  changed_when: >-
+    tailscale_auth_result.rc == 0 and
+    'already authenticated' not in tailscale_auth_result.stdout
+
+- name: Allow tailscale operator to manage Tailscale without sudo
+  ansible.builtin.file:
+    path: /var/run/tailscale
+    mode: "0755"
+    state: directory
+  become: true
+
+- name: Wait for Tailscale to establish connection
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Retrieve Tailscale IP address
+  ansible.builtin.shell:
+    cmd: "{{ tailscale_cli_bin }} ip -4"
+  register: tailscale_ipv4
+  changed_when: false
+  retries: 5
+  delay: 2
+  until: tailscale_ipv4.rc == 0 and (tailscale_ipv4.stdout | trim | length) > 0
+  become: true
+
+- name: Display Tailscale network address
+  ansible.builtin.debug:
+    msg: "Tailscale IPv4: {{ tailscale_ipv4.stdout | trim }}"
+
+- name: Verify Tailscale daemon is active
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}"
+  register: tailscale_daemon_status
+  become: true
+
+- name: Assert Tailscale daemon is active
+  ansible.builtin.assert:
+    that:
+      - tailscale_daemon_status.status.ActiveState == 'active'
+    fail_msg: "Tailscale daemon is not active. Check systemctl status tailscaled for details."
+
+- name: Store Tailscale IP in ansible_facts for other roles
+  ansible.builtin.set_fact:
+    tailscale_ipv4_address: "{{ tailscale_ipv4.stdout | trim }}"

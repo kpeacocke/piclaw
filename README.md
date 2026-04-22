@@ -29,20 +29,27 @@ Deploy a **privacy-preserving AI inference gateway** on Raspberry Pi 5 + AI HAT+
 - **OS**: Raspberry Pi OS Trixie 64-bit (fresh install recommended)
 - **Control Host**: Ansible 2.20+ with Python 3.14+
 
-### 1. Configure Target Host
+### 1. Configure Target Host & Tailscale Auth Key
 
-Edit `inventories/prod/hosts.yml` to point to your Pi:
+**Edit `inventories/prod/hosts.yml`** to point to your Pi:
 
 ```yaml
 pi5-node:
-  ansible_host: 192.168.1.50  # ← Update to your Pi's IP
+  ansible_host: 192.168.1.50  # ← Update to your Pi's IP (or Tailscale IP after first deploy)
   ansible_user: pi
 ```
+
+**Obtain a Tailscale auth key** (required for bootstrap):
+1. Go to https://login.tailscale.com/admin/settings/keys
+2. Click **Generate auth key**
+3. ✅ Check "Reusable" (allows multiple devices)
+4. Copy the key: `tskey-auth-<base64>`
+5. You'll provide this when running the bootstrap playbook (via AWX survey or CLI prompt)
 
 ### 2. Run Playbooks (in order)
 
 ```bash
-# 1. Bootstrap: OS packages, firmware, Hailo runtime
+# 1. Bootstrap: Tailscale, OS packages, firmware, Hailo runtime
 ansible-playbook playbooks/bootstrap.yml -l pi5
 
 # 2. Deploy: Ollama + OpenClaw gateway
@@ -54,24 +61,44 @@ ansible-playbook playbooks/verify.yml -l pi5
 
 ### 3. Use the Gateway
 
-Once deployed, OpenClaw listens on `127.0.0.1:18789` (SSH port-forward to access from your machine):
+OpenClaw listens on `127.0.0.1:18789` and is accessible via **Tailscale mesh VPN** for secure, encrypted device-to-device access.
+
+#### Access via Tailscale (Recommended)
+
+1. **Join the Tailscale network**:
+   - Install [Tailscale](https://tailscale.com/download) on your control machine
+   - Sign in with your Tailscale account
+   - Your Pi will auto-join during bootstrap with the auth key you provided
+
+2. **Find the Pi's Tailscale IP**:
+   ```bash
+   tailscale list  # Shows all devices; look for your pi5 hostname
+   # Example: pi5 (100.100.100.50) to authenticate; created Apr 20, 2026
+   ```
+
+3. **Access OpenClaw via Tailscale**:
+   ```bash
+   # Web UI (Canvas)
+   open http://100.100.100.50:18789/__openclaw__/canvas/
+
+   # CLI
+   ssh pi@100.100.100.50 openclaw chat
+
+   # OpenAI-compatible API
+   curl http://100.100.100.50:18789/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{
+       "model": "ollama/llama3.2:3b",
+       "messages": [{"role": "user", "content": "Hello from Tailscale!"}]
+     }'
+   ```
+
+#### Legacy SSH Port-Forward (if Tailscale unavailable)
 
 ```bash
-ssh -L 18789:127.0.0.1:18789 pi@192.168.1.50
+ssh -L 18789:127.0.0.1:18789 pi@<pi5-ip>
 
-# Option 1: Web UI (Canvas)
-# Open http://localhost:18789/__openclaw__/canvas/ in your browser
-
-# Option 2: CLI
-ssh pi@192.168.1.50 openclaw chat
-
-# Option 3: OpenAI-compatible API
-curl http://127.0.0.1:18789/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "ollama/llama3.2:3b",
-    "messages": [{"role": "user", "content": "Hello, OpenClaw!"}]
-  }'
+# Then access at http://localhost:18789/...
 ```
 
 ## Deployment Modes
@@ -139,11 +166,30 @@ openclaw_external_provider_model: gpt-4-mini
 openclaw_external_provider_api_key_env: OPENAI_API_KEY
 ```
 
+**Tailscale Mesh VPN** (`tailscale_auth_key`)
+- **Required** — Obtain a reusable auth key from https://login.tailscale.com/admin/settings/keys
+  1. Go to **Settings > Keys**
+  2. Click **Generate auth key**
+  3. ✅ Check "Reusable" (allows multiple devices)
+  4. Copy the key: `tskey-auth-<base64>`
+- Provided via AWX survey (bootstrap playbook) or `group_vars/pi5.yml`
+- Enables secure, encrypted mesh VPN access to all services
+- Replaces LAN allowlists with Tailscale network boundary
+
+**Additional Tailscale Options**
+```yaml
+tailscale_device_name: "pi5"  # Custom hostname on Tailscale network
+tailscale_accept_dns: true    # Let Tailscale manage system DNS
+tailscale_advertise_routes: false  # Advertise routes to other devices
+tailscale_advertise_exit_node: false  # Don't route all traffic through Pi
+```
+
 ## What Gets Installed & Validated
 
 Each playbook enforces a known-good state:
 
 ### `bootstrap.yml`
+- **Tailscale** — Mesh VPN agent (joins your Tailscale network via auth key)
 - OS packages and security updates
 - Firmware updates + reboot handling
 - PCIe Gen 3.0 optimization
@@ -227,14 +273,17 @@ All checks pass by default before commit (pre-commit hooks).
 Test code changes on a real Pi before submitting a PR:
 
 ```bash
-# SSH to the Pi and check status
-ssh pi@192.168.1.50 openclaw status
+# Get Pi's Tailscale IP: tailscale list | grep pi5
+# Assuming Pi's Tailscale IP is 100.100.100.50
 
-# Re-run a single playbook
+# SSH to the Pi via Tailscale and check status
+ssh pi@100.100.100.50 openclaw status
+
+# Re-run a single playbook from your control machine
 ansible-playbook playbooks/openclaw.yml -l pi5 -v
 
 # Check logs on the Pi
-ssh pi@192.168.1.50 journalctl -u openclaw -n 50 -f
+ssh pi@100.100.100.50 journalctl -u openclaw -n 50 -f
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, PRs, and release workflow.

@@ -57,14 +57,20 @@ CORS_ALLOW_HEADERS = os.environ.get(
     "HAILO_PROXY_CORS_ALLOW_HEADERS",
     "Authorization, Content-Type, X-Requested-With",
 )
+# Tailscale mesh VPN provides network boundary; accept localhost and Tailscale IPs (100.64.0.0/10).
+# To allow legacy LAN access, override HAILO_PROXY_ALLOWED_HOSTS with explicit IP list.
 ALLOWED_HOSTS = {
     item.strip().lower()
     for item in os.environ.get(
         "HAILO_PROXY_ALLOWED_HOSTS",
-        "127.0.0.1:8081,localhost:8081,[::1]:8081,127.0.0.1,localhost,[::1],192.168.1.254:8081,192.168.1.254",
+        "127.0.0.1:8081,localhost:8081,[::1]:8081,127.0.0.1,localhost,[::1]",
     ).split(",")
     if item.strip()
 }
+# Allowed host prefixes for Tailscale IP range (100.64.0.0/10)
+ALLOWED_HOST_PREFIXES = [
+    "100.",  # Tailscale IP range starts with 100.
+]
 
 
 def _get_temp_dir():
@@ -1038,7 +1044,14 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def _is_host_allowed(self, host):
         if not host:
             return False
-        return host in ALLOWED_HOSTS
+        host_lower = host.lower()
+        # Check explicit allowlist (localhost, IPv6 loopback, etc.)
+        if host_lower in ALLOWED_HOSTS:
+            return True
+        # Check Tailscale IP range (100.64.0.0/10, starts with "100.")
+        # Extract IP without port
+        host_ip = host_lower.split(":")[0] if ":" in host_lower and not host_lower.startswith("[") else host_lower.rstrip("]")
+        return any(host_ip.startswith(prefix) for prefix in ALLOWED_HOST_PREFIXES)
 
     def _deny_request(self, trace_id, method, path, started, reason, details):
         payload = json.dumps({"error": reason, "details": details}).encode("utf-8")

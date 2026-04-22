@@ -6,5 +6,6 @@
   become: true
 
   roles:
+    - role: tailscale
     - role: base
     - role: hailo

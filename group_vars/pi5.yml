@@ -5,6 +5,13 @@ pi_user: "{{ ansible_user | default('pi') }}"
 # AWX should set environment-specific values in inventory/group/host vars instead.
 # Repository-wide defaults now live under each role's defaults/main.yml.
 
+# Tailscale mesh VPN configuration
+# Obtain a reusable auth key from https://login.tailscale.com/admin/settings/keys
+tailscale_auth_key: ""  # Set via AWX survey or inventory override
+tailscale_accept_dns: true
+tailscale_advertise_routes: false
+tailscale_advertise_exit_node: false
+
 # Common local overrides:
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true

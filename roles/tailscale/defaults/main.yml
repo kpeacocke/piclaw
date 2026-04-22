@@ -1,0 +1,38 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+
+# Tailscale integration for secure mesh VPN networking.
+# Provides device-to-device encrypted connectivity without exposing services to LAN.
+
+# Tailscale installation and service management
+tailscale_service_name: tailscaled
+tailscale_cli_bin: /usr/bin/tailscale
+tailscale_daemon_bin: /usr/sbin/tailscaled
+
+# Authentication: reusable auth key from Tailscale (set via AWX survey or inventory)
+# Format: tskey-auth-<base64>
+tailscale_auth_key: ""
+
+# Device naming: defaults to ansible_hostname, override for custom Tailscale device name
+tailscale_device_name: "{{ ansible_hostname | default('pi5') }}"
+
+# Route advertisement: whether Pi should advertise routes to other Tailscale devices
+# Disable if you want this Pi to be a pure client; enable if it's a central hub
+tailscale_advertise_routes: false
+
+# Exit node: whether this Pi should advertise as an exit node (allows routing all traffic through it)
+tailscale_advertise_exit_node: false
+
+# DNS handling: whether Tailscale should manage system DNS (accept Tailscale's DNS config)
+tailscale_accept_dns: true
+
+# Operator user: which user can control tailscale CLI without sudo
+# For ansible deployments, this is typically the ansible_user (pi)
+tailscale_operator_user: "{{ ansible_user | default('pi') }}"
+
+# Health check timeout: allow this many seconds for Tailscale daemon to become healthy
+tailscale_health_check_timeout: 30
+
+# Retry configuration for service startup
+tailscale_start_retries: 10
+tailscale_start_retry_delay: 3
