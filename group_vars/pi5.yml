@@ -6,5 +6,5 @@ pi_user: "{{ ansible_user | default('pi') }}"
 # Repository-wide defaults now live under each role's defaults/main.yml.
 
 # Common local overrides:
-hailo_model: qwen2:1.5b
+hailo_model: llama3.2:3b
 use_sanitizer_proxy: true

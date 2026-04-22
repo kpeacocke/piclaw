@@ -21,7 +21,7 @@ surveys:
         type: text
         question: Hailo model tag
         required: true
-        default: qwen2:1.5b
+        default: llama3.2:3b
       - variable: use_sanitizer_proxy
         type: multiplechoice
         question: Enable sanitizer proxy

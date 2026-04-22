@@ -31,7 +31,7 @@ import urllib.request
 LISTEN_PORT = 8081
 LISTEN_HOST = os.environ.get("HAILO_PROXY_LISTEN_HOST", "0.0.0.0")
 UPSTREAM = "http://127.0.0.1:8000"
-DEFAULT_MODEL_ID = os.environ.get("HAILO_MODEL", "qwen2:1.5b")
+DEFAULT_MODEL_ID = os.environ.get("HAILO_MODEL", "llama3.2:3b")
 WORKSPACE_SKILLS_DIR = os.path.expanduser("~/.openclaw/workspace/skills")
 MAX_TOOL_DESCRIPTION_CHARS = 120
 MAX_TOOL_COUNT_IN_PROMPT = 8
@@ -880,7 +880,7 @@ def fake_api_show(body_bytes):
         data = json.loads(body_bytes)
     except Exception:
         data = {}
-    model = data.get("name", data.get("model", "qwen2:1.5b"))
+    model = data.get("name", data.get("model", "llama3.2:3b"))
     return json.dumps(
         {
             "modelfile": "FROM %s" % model,

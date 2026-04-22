@@ -69,7 +69,7 @@ ssh pi@192.168.1.50 openclaw chat
 curl http://127.0.0.1:18789/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "ollama/qwen2:1.5b",
+    "model": "ollama/llama3.2:3b",
     "messages": [{"role": "user", "content": "Hello, OpenClaw!"}]
   }'
 ```
@@ -123,7 +123,7 @@ Repository defaults live in each role's `defaults/main.yml`. Override them in on
 - `external-power` — Fallback to cloud API (e.g., OpenAI)
 
 **Model Selection** (`hailo_model`)
-- Default: `qwen2:1.5b` (1.5B parameter, fast, low VRAM)
+- Default: `llama3.2:3b` (3B parameter, strongest installed Hailo-backed local model)
 - Options: Any Ollama model compatible with Hailo's quantization constraints
 
 **Sanitizer Proxy** (`use_sanitizer_proxy`)
