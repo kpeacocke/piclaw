@@ -550,7 +550,7 @@
 
 - name: Run OpenClaw health verification
   ansible.builtin.uri:
-    url: "http://{{ ansible_default_ipv4.address | default('127.0.0.1') }}:{{ openclaw_gateway_port }}/health"
+    url: "http://127.0.0.1:{{ openclaw_gateway_port }}/health"
     method: GET
     status_code: 200
     return_content: true

@@ -112,7 +112,7 @@
 
 - name: Validate OpenClaw gateway reports healthy
   ansible.builtin.uri:
-    url: "http://{{ ansible_default_ipv4.address | default('127.0.0.1') }}:{{ openclaw_gateway_port | default(18789) }}/health"
+    url: "http://127.0.0.1:{{ openclaw_gateway_port | default(18789) }}/health"
     method: GET
     status_code: 200
     return_content: true
@@ -147,19 +147,12 @@
   register: validate_openclaw_listeners
   changed_when: false
 
-- name: Assert OpenClaw gateway is not loopback-only
+- name: Assert OpenClaw gateway listener exists on expected port
   ansible.builtin.assert:
     that:
-      - (validate_openclaw_listeners.stdout | regex_search('127\\.0\\.0\\.1:{{ openclaw_gateway_port | default(18789) }}')) is none
+      - (validate_openclaw_listeners.stdout | regex_search('(127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\]|\\[::\\]):{{ openclaw_gateway_port | default(18789) }}')) is not none
     fail_msg: >-
-      OpenClaw gateway is still loopback-only on port {{ openclaw_gateway_port | default(18789) }}.
-
-- name: Assert OpenClaw gateway listens on a non-loopback address
-  ansible.builtin.assert:
-    that:
-      - (validate_openclaw_listeners.stdout | regex_search('(0\\.0\\.0\\.0|\\[::\\]):{{ openclaw_gateway_port | default(18789) }}')) is not none
-    fail_msg: >-
-      OpenClaw gateway did not bind to a non-loopback address on port {{ openclaw_gateway_port | default(18789) }}.
+      OpenClaw gateway listener was not found on port {{ openclaw_gateway_port | default(18789) }}.
 
 - name: Capture Tailscale serve status
   ansible.builtin.command: tailscale serve status --json

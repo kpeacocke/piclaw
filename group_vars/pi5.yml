@@ -17,6 +17,6 @@ tailscale_advertise_exit_node: false
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
 
-# Use LAN bind mode and expose over Tailscale serve for a stable,
+# Use loopback bind mode and expose over Tailscale serve for a stable,
 # deterministic remote access path.
-openclaw_gateway_bind_mode: lan
+openclaw_gateway_bind_mode: loopback
