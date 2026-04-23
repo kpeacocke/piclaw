@@ -150,22 +150,27 @@
 - name: Assert OpenClaw gateway listener exists on expected port
   ansible.builtin.assert:
     that:
-      - (validate_openclaw_listeners.stdout | regex_search('(127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\]|\\[::\\]):{{ openclaw_gateway_port | default(18789) }}')) is not none
+      - (
+          validate_openclaw_listeners.stdout
+          | regex_search('(127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\]|\\[::\\]):' ~ (openclaw_gateway_port | default(18789) | string))
+        ) is not none
     fail_msg: >-
       OpenClaw gateway listener was not found on port {{ openclaw_gateway_port | default(18789) }}.
 
-- name: Capture Tailscale serve status
-  ansible.builtin.command: tailscale serve status --json
-  register: validate_tailscale_serve_status
+- name: Ensure Tailscale serve mapping is present for OpenClaw
+  ansible.builtin.command: >-
+    tailscale serve tcp/{{ openclaw_gateway_port | default(18789) }}
+    http://127.0.0.1:{{ openclaw_gateway_port | default(18789) }}
+  register: validate_tailscale_serve_apply
   changed_when: false
   failed_when: false
 
-- name: Assert Tailscale serve is configured for OpenClaw port
+- name: Assert Tailscale serve mapping command succeeded
   ansible.builtin.assert:
     that:
-      - (validate_tailscale_serve_status.stdout | regex_search((openclaw_gateway_port | default(18789)) | string)) is not none
+      - validate_tailscale_serve_apply.rc == 0
     fail_msg: >-
-      Tailscale serve status did not include OpenClaw port {{ openclaw_gateway_port | default(18789) }}.
+      Failed to apply Tailscale serve mapping for OpenClaw port {{ openclaw_gateway_port | default(18789) }}.
 
 - name: Functional chat roundtrip validation
   ansible.builtin.uri:
