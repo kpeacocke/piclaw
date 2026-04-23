@@ -549,11 +549,13 @@
   changed_when: false
 
 - name: Run OpenClaw health verification
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} health"
-  become: true
-  become_user: "{{ openclaw_user }}"
-  environment:
-    HOME: "{{ openclaw_user_home }}"
-    NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
-    OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
-  changed_when: false
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ openclaw_gateway_port }}/health"
+    method: GET
+    status_code: 200
+    return_content: true
+    timeout: 5
+  register: openclaw_gateway_health
+  retries: 10
+  delay: 2
+  until: openclaw_gateway_health.status == 200
