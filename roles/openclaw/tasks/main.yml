@@ -439,7 +439,7 @@
     name: openclaw
     enabled: true
     daemon_reload: true
-    state: "{{ 'restarted' if openclaw_unit_file.changed else 'started' }}"
+    state: restarted
   become: true
 
 - name: Wait for OpenClaw service to become active
