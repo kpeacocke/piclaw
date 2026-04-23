@@ -10,9 +10,10 @@ tailscale_cli_bin: /usr/bin/tailscale
 tailscale_daemon_bin: /usr/sbin/tailscaled
 
 # Authentication: reusable auth key from Tailscale.
-# In AWX, prefer a custom credential or encrypted inventory/group var over surveys.
+# In AWX, injected via TAILSCALE_AUTH_KEY env var from the piclaw-tailscale-auth credential.
+# Locally, export TAILSCALE_AUTH_KEY=tskey-auth-... before running.
 # Format: tskey-auth-<base64>
-tailscale_auth_key: ""
+tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') | default('', true) }}"
 
 # Device naming: defaults to ansible_hostname, override for custom Tailscale device name
 tailscale_device_name: "{{ ansible_hostname | default('pi5') }}"

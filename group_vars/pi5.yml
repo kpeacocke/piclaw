@@ -7,8 +7,8 @@ pi_user: "{{ ansible_user | default('pi') }}"
 
 # Tailscale mesh VPN configuration
 # Obtain a reusable auth key from https://login.tailscale.com/admin/settings/keys
-# In AWX, prefer storing this in a custom credential or encrypted inventory/group var.
-tailscale_auth_key: ""
+# In AWX, the TAILSCALE_AUTH_KEY env var is injected by the piclaw-tailscale-auth credential.
+tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') | default('', true) }}"
 tailscale_accept_dns: true
 tailscale_advertise_routes: false
 tailscale_advertise_exit_node: false
