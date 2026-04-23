@@ -9,7 +9,8 @@ tailscale_service_name: tailscaled
 tailscale_cli_bin: /usr/bin/tailscale
 tailscale_daemon_bin: /usr/sbin/tailscaled
 
-# Authentication: reusable auth key from Tailscale (set via AWX survey or inventory)
+# Authentication: reusable auth key from Tailscale.
+# In AWX, prefer a custom credential or encrypted inventory/group var over surveys.
 # Format: tskey-auth-<base64>
 tailscale_auth_key: ""
 

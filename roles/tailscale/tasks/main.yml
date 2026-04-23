@@ -72,19 +72,24 @@
     timeout: "{{ tailscale_health_check_timeout }}"
   become: true
 
-- name: Build Tailscale authentication command
+- name: Build Tailscale authentication arguments
   ansible.builtin.set_fact:
-    tailscale_auth_cmd: >-
-      {{ tailscale_cli_bin }} up
-      --auth-key={{ tailscale_auth_key }}
-      --hostname={{ tailscale_device_name }}
-      {% if tailscale_accept_dns %}--accept-dns{% else %}--accept-dns=false{% endif %}
-      {% if tailscale_advertise_routes %}--advertise-routes=192.168.0.0/16{% endif %}
-      {% if tailscale_advertise_exit_node %}--advertise-exit-node{% endif %}
+    tailscale_auth_argv: >-
+      {{
+        [
+          tailscale_cli_bin,
+          'up',
+          '--auth-key=' ~ tailscale_auth_key,
+          '--hostname=' ~ tailscale_device_name,
+          '--accept-dns' if tailscale_accept_dns else '--accept-dns=false',
+        ]
+        + (['--advertise-routes=192.168.0.0/16'] if tailscale_advertise_routes else [])
+        + (['--advertise-exit-node'] if tailscale_advertise_exit_node else [])
+      }}
 
 - name: Authenticate with Tailscale network
-  ansible.builtin.shell:
-    cmd: "{{ tailscale_auth_cmd }}"
+  ansible.builtin.command:
+    argv: "{{ tailscale_auth_argv }}"
   register: tailscale_auth_result
   retries: "{{ tailscale_start_retries }}"
   delay: "{{ tailscale_start_retry_delay }}"
@@ -109,8 +114,11 @@
     seconds: 5
 
 - name: Retrieve Tailscale IP address
-  ansible.builtin.shell:
-    cmd: "{{ tailscale_cli_bin }} ip -4"
+  ansible.builtin.command:
+    argv:
+      - "{{ tailscale_cli_bin }}"
+      - ip
+      - -4
   register: tailscale_ipv4
   changed_when: false
   retries: 5

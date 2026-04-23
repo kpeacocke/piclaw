@@ -44,7 +44,7 @@ pi5-node:
 2. Click **Generate auth key**
 3. ✅ Check "Reusable" (allows multiple devices)
 4. Copy the key: `tskey-auth-<base64>`
-5. You'll provide this when running the bootstrap playbook (via AWX survey or CLI prompt)
+5. Store it in AWX as a secret credential or encrypted inventory variable
 
 ### 2. Run Playbooks (in order)
 
@@ -172,7 +172,7 @@ openclaw_external_provider_api_key_env: OPENAI_API_KEY
   2. Click **Generate auth key**
   3. ✅ Check "Reusable" (allows multiple devices)
   4. Copy the key: `tskey-auth-<base64>`
-- Provided via AWX survey (bootstrap playbook) or `group_vars/pi5.yml`
+- Provide it via an AWX custom credential, an encrypted AWX inventory/group variable, or an Ansible vault file
 - Enables secure, encrypted mesh VPN access to all services
 - Replaces LAN allowlists with Tailscale network boundary
 
@@ -292,13 +292,31 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, PRs, and release workflow.
 
 ### Quick Import
 
-Job templates and surveys are defined in `awx/job_templates.yml` and `awx/surveys.yml`. Create them in AWX via:
+Job templates, surveys, and credential examples are defined in `awx/job_templates.yml`, `awx/surveys.yml`, and `awx/credentials.yml`. Create them in AWX via:
 
 1. **API**: `awx-cli` or `curl` with the YAML spec
 2. **UI**: Create manually, use the specs as reference
 3. **Automation**: Third-party AWX provisioning tools
 
 ### Key Configuration
+
+**Tailscale Secret Storage**
+
+Do not keep the Tailscale auth key in a survey. Store it once in AWX and let the bootstrap job consume it automatically.
+
+Recommended options:
+
+1. **Custom AWX credential**
+  - Create a custom credential type with one secret field: `tailscale_auth_key`
+  - Inject it as an extra var named `tailscale_auth_key`
+  - Attach that credential to `piclaw-bootstrap`
+  - Use `awx/credentials.yml` as the source-controlled reference
+
+2. **Encrypted inventory/group variable**
+  - Put `tailscale_auth_key` in the AWX inventory or group vars UI
+  - Mark it as a secret if your AWX version supports secret inputs for that path
+
+The bootstrap template no longer prompts for this value by default.
 
 **Galaxy Credential Requirement**
 
@@ -336,7 +354,7 @@ See `awx/surveys.yml` for survey question specs and defaults.
 
 - **Never commit secrets** to git (passwords, API keys, hostnames)
 - **Vault encryption** available: `ansible-vault encrypt group_vars/pi5.vault.yml`
-- **AWX secrets**: Use survey password fields or credential plugins
+- **AWX secrets**: Prefer credential plugins or encrypted inventory vars; avoid surveys for persistent secrets
 - **API keys** (for external providers): Injected at runtime via environment variables, not in playbooks
 
 For sensitive deployments:

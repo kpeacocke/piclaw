@@ -3,12 +3,7 @@ surveys:
   bootstrap:
     name: piclaw-bootstrap-survey
     description: Runtime variables for bootstrap execution
-    questions:
-      - variable: tailscale_auth_key
-        type: password
-        question: Tailscale reusable auth key (get from https://login.tailscale.com/admin/settings/keys)
-        required: true
-        default: ""
+    questions: []
 
   openclaw:
     name: piclaw-openclaw-survey

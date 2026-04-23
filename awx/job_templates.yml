@@ -11,8 +11,7 @@ job_templates:
     credentials:
       - pi5-ssh
     ask_variables_on_launch: true
-    survey_enabled: true
-    survey_spec_ref: awx/surveys.yml#/surveys/bootstrap
+    survey_enabled: false
 
   - name: piclaw-openclaw
     description: Install/verify Hailo Ollama model stack and OpenClaw
