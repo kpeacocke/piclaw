@@ -168,6 +168,16 @@
   ansible.builtin.set_fact:
     openclaw_cli_path_resolved: "{{ openclaw_cli_path_resolved.stdout | trim }}"
 
+- name: Check for system OpenClaw binary path
+  ansible.builtin.stat:
+    path: /usr/bin/openclaw
+  register: openclaw_system_binary
+
+- name: Prefer system OpenClaw binary when available
+  ansible.builtin.set_fact:
+    openclaw_cli_path_resolved: /usr/bin/openclaw
+  when: openclaw_system_binary.stat.exists
+
 - name: Update OpenClaw CLI to latest available release
   ansible.builtin.command: "{{ openclaw_cli_path_resolved }} update --yes --no-restart"
   register: openclaw_update_result
