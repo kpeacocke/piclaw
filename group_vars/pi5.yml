@@ -17,7 +17,6 @@ tailscale_advertise_exit_node: false
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
 
-# Expose OpenClaw gateway on all interfaces so it's accessible locally
-# and Tailscale can serve it over the mesh network
-openclaw_gateway_bind_host: 0.0.0.0
-openclaw_gateway_bind_mode: lan
+# Run OpenClaw in native Tailscale bind mode so `openclaw status` reports
+# Tailscale as on and exposes the gateway via tailnet directly.
+openclaw_gateway_bind_mode: tailnet

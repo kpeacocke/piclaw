@@ -405,7 +405,6 @@
       Group={{ openclaw_user }}
       Environment=HOME={{ openclaw_user_home }}
       Environment=OPENCLAW_GATEWAY_PORT={{ openclaw_gateway_port }}
-      Environment=OPENCLAW_GATEWAY_BIND={{ openclaw_gateway_bind_host }}
       Environment=NODE_COMPILE_CACHE={{ openclaw_node_compile_cache_dir }}
       Environment=OPENCLAW_NO_RESPAWN={{ 1 if (openclaw_no_respawn | bool) else 0 }}
       PassEnvironment={{ openclaw_external_provider_api_key_env }}
