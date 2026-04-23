@@ -19,3 +19,4 @@ use_sanitizer_proxy: true
 
 # Expose OpenClaw gateway on all interfaces so Tailscale peers can reach it.
 openclaw_gateway_bind_host: 0.0.0.0
+openclaw_gateway_bind_mode: tailnet
