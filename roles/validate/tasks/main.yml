@@ -138,14 +138,14 @@
 - name: Assert OpenClaw reports Tailscale is on
   ansible.builtin.assert:
     that:
-      - validate_openclaw_status_deep.stdout is regex_search('Tailscale\\s*\\|\\s*on')
+      - (validate_openclaw_status_deep.stdout | regex_search('Tailscale\\s*\\|\\s*on')) is not none
     fail_msg: >-
       OpenClaw deep status did not report Tailscale as on.
 
 - name: Assert OpenClaw gateway is not loopback-only
   ansible.builtin.assert:
     that:
-      - validate_openclaw_status_deep.stdout is not regex_search('ws://127\\.0\\.0\\.1:18789')
+      - (validate_openclaw_status_deep.stdout | regex_search('ws://127\\.0\\.0\\.1:18789')) is none
     fail_msg: >-
       OpenClaw gateway is still reporting loopback-only endpoint.
 
