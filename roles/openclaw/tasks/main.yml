@@ -154,9 +154,8 @@
   changed_when: false
   failed_when: false
 
-- name: Install OpenClaw CLI globally with npm
-  ansible.builtin.command: npm install -g {{ openclaw_npm_package }}
-  when: openclaw_cli_path.rc != 0
+- name: Install or upgrade OpenClaw CLI globally with npm
+  ansible.builtin.command: npm install -g {{ openclaw_npm_package }}@latest
   changed_when: true
   become: true
 
