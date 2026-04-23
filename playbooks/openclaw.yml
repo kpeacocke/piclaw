@@ -4,6 +4,8 @@
   hosts: pi5
   gather_facts: true
   become: true
+  vars_files:
+    - ../group_vars/pi5.yml
 
   pre_tasks:
     - name: Verify Tailscale is active and healthy
