@@ -307,8 +307,9 @@ Do not keep the Tailscale auth key in a survey. Store it once in AWX and let the
 Recommended options:
 
 1. **Custom AWX credential**
-  - Create a custom credential type with one secret field: `tailscale_auth_key`
-  - Inject it as an extra var named `tailscale_auth_key`
+  - Create a credential type with one secret field: `tailscale_auth_key`
+  - Paste the field schema into `Input configuration`
+  - Paste the variable injection into `Injector configuration` or `Output configuration`, depending on your AWX version
   - Attach that credential to `piclaw-bootstrap`
   - Use `awx/credentials.yml` as the source-controlled reference
 

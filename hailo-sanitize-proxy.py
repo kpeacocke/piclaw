@@ -1050,7 +1050,11 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
             return True
         # Check Tailscale IP range (100.64.0.0/10, starts with "100.")
         # Extract IP without port
-        host_ip = host_lower.split(":")[0] if ":" in host_lower and not host_lower.startswith("[") else host_lower.rstrip("]")
+        host_ip = (
+            host_lower.split(":")[0]
+            if ":" in host_lower and not host_lower.startswith("[")
+            else host_lower.rstrip("]")
+        )
         return any(host_ip.startswith(prefix) for prefix in ALLOWED_HOST_PREFIXES)
 
     def _deny_request(self, trace_id, method, path, started, reason, details):
