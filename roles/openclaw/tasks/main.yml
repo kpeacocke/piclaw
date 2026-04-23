@@ -168,6 +168,13 @@
   ansible.builtin.set_fact:
     openclaw_cli_path_resolved: "{{ openclaw_cli_path_resolved.stdout | trim }}"
 
+- name: Update OpenClaw CLI to latest available release
+  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} update --yes --no-restart"
+  register: openclaw_update_result
+  changed_when: true
+  when: openclaw_auto_update_cli | bool
+  become: true
+
 - name: Stop OpenClaw service before config update
   ansible.builtin.systemd:
     name: openclaw
