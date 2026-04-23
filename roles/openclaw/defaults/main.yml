@@ -60,7 +60,7 @@ openclaw_tools_deny:
   - browser
 openclaw_no_respawn: true
 openclaw_node_compile_cache_dir: /var/tmp/openclaw-compile-cache
-openclaw_doctor_auto_fix: true
+openclaw_doctor_auto_fix: false
 openclaw_npm_package: openclaw
 openclaw_primary_model_ref: "{{ openclaw_provider_name }}/{{ openclaw_selected_model }}"
 hailo_ollama_service_name: hailo-ollama
