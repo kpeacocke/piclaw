@@ -17,6 +17,6 @@ tailscale_advertise_exit_node: false
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
 
-# Run OpenClaw in native Tailscale bind mode so `openclaw status` reports
-# Tailscale as on and exposes the gateway via tailnet directly.
-openclaw_gateway_bind_mode: tailnet
+# Use LAN bind mode and expose over Tailscale serve for a stable,
+# deterministic remote access path.
+openclaw_gateway_bind_mode: lan

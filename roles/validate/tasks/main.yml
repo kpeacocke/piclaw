@@ -134,20 +134,39 @@
   environment:
     HOME: "{{ openclaw_validate_user_home }}"
   changed_when: false
+  failed_when: false
 
-- name: Assert OpenClaw reports Tailscale is on
-  ansible.builtin.assert:
-    that:
-      - (validate_openclaw_status_deep.stdout | regex_search('Tailscale\\s*\\|\\s*on')) is not none
-    fail_msg: >-
-      OpenClaw deep status did not report Tailscale as on.
+- name: Capture OpenClaw gateway listeners
+  ansible.builtin.command: ss -ltnp
+  register: validate_openclaw_listeners
+  changed_when: false
 
 - name: Assert OpenClaw gateway is not loopback-only
   ansible.builtin.assert:
     that:
-      - (validate_openclaw_status_deep.stdout | regex_search('ws://127\\.0\\.0\\.1:18789')) is none
+      - (validate_openclaw_listeners.stdout | regex_search('127\\.0\\.0\\.1:{{ openclaw_gateway_port }}')) is none
     fail_msg: >-
-      OpenClaw gateway is still reporting loopback-only endpoint.
+      OpenClaw gateway is still loopback-only on port {{ openclaw_gateway_port }}.
+
+- name: Assert OpenClaw gateway listens on a non-loopback address
+  ansible.builtin.assert:
+    that:
+      - (validate_openclaw_listeners.stdout | regex_search('(0\\.0\\.0\\.0|\\[::\\]):{{ openclaw_gateway_port }}')) is not none
+    fail_msg: >-
+      OpenClaw gateway did not bind to a non-loopback address on port {{ openclaw_gateway_port }}.
+
+- name: Capture Tailscale serve status
+  ansible.builtin.command: tailscale serve status --json
+  register: validate_tailscale_serve_status
+  changed_when: false
+  failed_when: false
+
+- name: Assert Tailscale serve is configured for OpenClaw port
+  ansible.builtin.assert:
+    that:
+      - (validate_tailscale_serve_status.stdout | regex_search(openclaw_gateway_port | string)) is not none
+    fail_msg: >-
+      Tailscale serve status did not include OpenClaw port {{ openclaw_gateway_port }}.
 
 - name: Functional chat roundtrip validation
   ansible.builtin.uri:

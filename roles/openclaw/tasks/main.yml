@@ -159,6 +159,20 @@
   changed_when: true
   become: true
 
+- name: Remove legacy OpenClaw install from /usr/local if present
+  ansible.builtin.file:
+    path: /usr/local/lib/node_modules/openclaw
+    state: absent
+  become: true
+
+- name: Ensure /usr/local/bin/openclaw points to system install
+  ansible.builtin.file:
+    src: /usr/bin/openclaw
+    dest: /usr/local/bin/openclaw
+    state: link
+    force: true
+  become: true
+
 - name: Resolve OpenClaw CLI path
   ansible.builtin.command: which openclaw
   register: openclaw_cli_path_resolved
@@ -177,13 +191,6 @@
   ansible.builtin.set_fact:
     openclaw_cli_path_resolved: /usr/bin/openclaw
   when: openclaw_system_binary.stat.exists
-
-- name: Update OpenClaw CLI to latest available release
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} update --yes --no-restart"
-  register: openclaw_update_result
-  changed_when: true
-  when: openclaw_auto_update_cli | bool
-  become: true
 
 - name: Stop OpenClaw service before config update
   ansible.builtin.systemd:
