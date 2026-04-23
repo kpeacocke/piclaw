@@ -23,3 +23,22 @@
     - role: docker
     - role: hailo_ollama
     - role: openclaw
+
+  post_tasks:
+    - name: Configure Tailscale serve to expose OpenClaw gateway
+      ansible.builtin.command: >
+        tailscale serve tcp/{{ openclaw_gateway_port }} http://127.0.0.1:{{ openclaw_gateway_port }}
+      register: tailscale_serve_result
+      changed_when: false
+      failed_when: false
+
+    - name: Verify Tailscale serve is configured for OpenClaw
+      ansible.builtin.command: >
+        tailscale serve status --json
+      register: tailscale_serve_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display Tailscale serve configuration for debugging
+      ansible.builtin.debug:
+        var: tailscale_serve_status.stdout | from_json
