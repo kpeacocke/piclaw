@@ -7,24 +7,34 @@
       - tailscale_auth_key | trim | length > 0
     fail_msg: "tailscale_auth_key must be set. Obtain a reusable auth key from https://login.tailscale.com/admin/settings/keys"
 
-- name: Add Tailscale package repository key
-  ansible.builtin.apt_key:
-    url: https://pkgs.tailscale.com/stable/ubuntu/focal.gpg
-    state: present
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Download Tailscale signing key
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg
+    dest: /etc/apt/keyrings/tailscale.gpg
+    mode: "0644"
   register: tailscale_repo_key
   retries: 3
   delay: 5
   until: tailscale_repo_key is succeeded
+  become: true
 
 - name: Add Tailscale package repository
   ansible.builtin.apt_repository:
-    repo: deb https://pkgs.tailscale.com/stable/ubuntu focal main
+    repo: "deb [signed-by=/etc/apt/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/debian bookworm main"
     state: present
     filename: tailscale
   register: tailscale_repo
   retries: 3
   delay: 5
   until: tailscale_repo is succeeded
+  become: true
 
 - name: Update apt cache for Tailscale packages
   ansible.builtin.apt:
