@@ -16,3 +16,6 @@ tailscale_advertise_exit_node: false
 # Common local overrides:
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
+
+# Expose OpenClaw gateway on all interfaces so Tailscale peers can reach it.
+openclaw_gateway_bind_host: 0.0.0.0
