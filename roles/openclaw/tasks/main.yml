@@ -441,7 +441,11 @@
       Environment=NODE_COMPILE_CACHE={{ openclaw_node_compile_cache_dir }}
       Environment=OPENCLAW_NO_RESPAWN={{ 1 if (openclaw_no_respawn | bool) else 0 }}
       PassEnvironment={{ openclaw_external_provider_api_key_env }}
-      ExecStart={{ openclaw_cli_path_resolved }} gateway run --port {{ openclaw_gateway_port }} --bind {{ openclaw_gateway_bind_mode }} --verbose
+      ExecStart={{ openclaw_cli_path_resolved }} gateway run \
+        --port {{ openclaw_gateway_port }} \
+        --bind {{ openclaw_gateway_bind_mode }} \
+        {% if openclaw_gateway_tailscale_mode != 'off' %}--tailscale {{ openclaw_gateway_tailscale_mode }} \
+        {% endif %}--verbose
       Restart=on-failure
       RestartSec=5
       StartLimitInterval=60
