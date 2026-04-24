@@ -19,6 +19,79 @@
           - tailscale_status.status.ActiveState == 'active'
         fail_msg: "Tailscale daemon is not active. Run bootstrap playbook first to set up Tailscale mesh VPN."
 
+    - name: Capture current Tailscale status
+      ansible.builtin.command: tailscale status --json
+      register: tailscale_status_json
+      changed_when: false
+      failed_when: false
+
+    - name: Compute Tailscale online state from status JSON
+      ansible.builtin.set_fact:
+        tailscale_online: >-
+          {{
+            (tailscale_status_json.rc | default(1)) == 0
+            and ((tailscale_status_json.stdout | default('{}') | from_json).BackendState | default('')) == 'Running'
+            and (((tailscale_status_json.stdout | default('{}') | from_json).Self | default({})).Online | default(false) | bool)
+          }}
+
+    - name: Build Tailscale up arguments for recovery
+      ansible.builtin.set_fact:
+        tailscale_reconnect_argv: >-
+          {{
+            [
+              'tailscale',
+              'up',
+              '--auth-key=' ~ tailscale_auth_key,
+              '--hostname=' ~ (tailscale_device_name | default(ansible_hostname)),
+              '--accept-dns' if (tailscale_accept_dns | default(true) | bool) else '--accept-dns=false'
+            ]
+            + (['--advertise-routes=192.168.0.0/16'] if (tailscale_advertise_routes | default(false) | bool) else [])
+            + (['--advertise-exit-node'] if (tailscale_advertise_exit_node | default(false) | bool) else [])
+          }}
+      when: not (tailscale_online | default(false) | bool)
+
+    - name: Reconnect Tailscale when status is offline
+      ansible.builtin.command:
+        argv: "{{ tailscale_reconnect_argv }}"
+      register: tailscale_reconnect_result
+      changed_when: tailscale_reconnect_result.rc == 0
+      when:
+        - not (tailscale_online | default(false) | bool)
+        - tailscale_auth_key | default('') | trim | length > 0
+      become: true
+
+    - name: Wait briefly after Tailscale reconnect attempt
+      ansible.builtin.pause:
+        seconds: 5
+      when: not (tailscale_online | default(false) | bool)
+
+    - name: Re-check Tailscale status after reconnect
+      ansible.builtin.command: tailscale status --json
+      register: tailscale_status_json_after
+      changed_when: false
+      failed_when: false
+      when: not (tailscale_online | default(false) | bool)
+
+    - name: Compute final Tailscale online state
+      ansible.builtin.set_fact:
+        tailscale_online_final: >-
+          {{
+            (
+              (tailscale_status_json_after.rc | default(1)) == 0
+              and ((tailscale_status_json_after.stdout | default('{}') | from_json).BackendState | default('')) == 'Running'
+              and (((tailscale_status_json_after.stdout | default('{}') | from_json).Self | default({})).Online | default(false) | bool)
+            ) if (not (tailscale_online | default(false) | bool))
+            else (tailscale_online | default(false) | bool)
+          }}
+
+    - name: Assert Tailscale is online before OpenClaw deployment
+      ansible.builtin.assert:
+        that:
+          - tailscale_online_final | bool
+        fail_msg: >-
+          Tailscale is still offline. Attach the Tailscale auth credential (TAILSCALE_AUTH_KEY)
+          to this job template or rerun bootstrap to restore tailnet connectivity.
+
   roles:
     - role: docker
     - role: hailo_ollama

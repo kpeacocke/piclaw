@@ -165,6 +165,22 @@
   changed_when: false
   failed_when: false
 
+- name: Capture Tailscale status JSON
+  ansible.builtin.command: tailscale status --json
+  register: validate_tailscale_status
+  changed_when: false
+  failed_when: false
+
+- name: Assert Tailscale backend is online
+  ansible.builtin.assert:
+    that:
+      - validate_tailscale_status.rc == 0
+      - ((validate_tailscale_status.stdout | default('{}') | from_json).BackendState | default('')) == 'Running'
+      - (((validate_tailscale_status.stdout | default('{}') | from_json).Self | default({})).Online | default(false) | bool)
+    fail_msg: >-
+      Tailscale is offline on this host. Run bootstrap with a valid Tailscale auth credential
+      or reconnect Tailscale before relying on remote OpenClaw access.
+
 - name: Functional chat roundtrip validation
   ansible.builtin.uri:
     url: "http://{{ hailo_bind_host }}:{{ hailo_port }}/api/chat"
