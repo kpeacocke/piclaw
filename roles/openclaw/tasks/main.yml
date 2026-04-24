@@ -66,14 +66,14 @@
 
 - name: Check npm version
   ansible.builtin.command: npm --version
-  register: openclaw_npm_version
+  register: openclaw_npm_cli_version
   changed_when: false
   failed_when: false
 
 - name: Verify npm is available
   ansible.builtin.assert:
     that:
-      - openclaw_npm_version.rc == 0
+      - openclaw_npm_cli_version.rc == 0
     fail_msg: >-
       npm is not available on the host. Install Node.js via bootstrap so npm is provisioned with nodejs.
 
