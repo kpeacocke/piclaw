@@ -62,7 +62,7 @@
       - openclaw_node_version_clean is version('22.12.0', '>=')
     fail_msg: >-
       OpenClaw requires Node.js >= 22.12.0, but found {{ openclaw_node_version.stdout | default('unknown') }}.
-      Ensure the bootstrap playbook has run to provision Node.js 22.
+      Ensure the bootstrap playbook has run to provision the latest supported Node.js runtime.
 
 - name: Check npm version
   ansible.builtin.command: npm --version
