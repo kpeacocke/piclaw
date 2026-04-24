@@ -272,6 +272,9 @@
       {
         "gateway": {
           "mode": "local",
+          "tailscale": {
+            "mode": "{{ openclaw_gateway_tailscale_mode }}"
+          },
           "trustedProxies": {{ openclaw_gateway_trusted_proxies | to_json }}
         },
         "models": {
@@ -345,6 +348,13 @@
     that:
       - openclaw_user_cfg_json.agents.defaults.sandbox.mode == openclaw_sandbox_mode
     fail_msg: OpenClaw user config does not include expected sandbox mode {{ openclaw_sandbox_mode }}.
+
+- name: Verify OpenClaw user tailscale mode is configured
+  ansible.builtin.assert:
+    that:
+      - openclaw_user_cfg_json.gateway.tailscale.mode == openclaw_gateway_tailscale_mode
+    fail_msg: >-
+      OpenClaw user config does not include expected gateway.tailscale.mode {{ openclaw_gateway_tailscale_mode }}.
 
 - name: Verify OpenClaw user denied tools are configured
   ansible.builtin.assert:

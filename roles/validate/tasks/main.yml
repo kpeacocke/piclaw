@@ -142,6 +142,14 @@
   changed_when: false
   failed_when: false
 
+- name: Assert OpenClaw reports Tailscale as on
+  ansible.builtin.assert:
+    that:
+      - (validate_openclaw_status_deep.stdout | regex_search('Tailscale\s*│\s*on')) is not none
+    fail_msg: >-
+      OpenClaw status --deep still reports Tailscale off. Check gateway.tailscale.mode and run openclaw doctor.
+  when: validate_require_openclaw_tailscale_on | bool
+
 - name: Capture OpenClaw gateway listeners
   ansible.builtin.command: ss -ltnp
   register: validate_openclaw_listeners

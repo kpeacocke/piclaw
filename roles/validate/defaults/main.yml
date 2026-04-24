@@ -27,5 +27,6 @@ openclaw_config_path: /etc/openclaw/config.yml
 hailo_ollama_service_name: hailo-ollama
 hailo_proxy_service_name: hailo-sanitize-proxy
 chat_smoke_timeout_seconds: 45
+validate_require_openclaw_tailscale_on: true
 openclaw_validate_user: "{{ pi_user | default(ansible_user | default('pi')) }}"
 openclaw_validate_user_home: "/home/{{ openclaw_validate_user }}"
