@@ -519,6 +519,7 @@
 
 - name: Run OpenClaw doctor auto-fix
   ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor --fix"
+  register: openclaw_doctor_fix_result
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
@@ -526,10 +527,12 @@
     NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
     OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
   changed_when: false
+  failed_when: false
   when: openclaw_doctor_auto_fix | bool
 
 - name: Run OpenClaw doctor verification
   ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor"
+  register: openclaw_doctor_verify_result
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
@@ -537,9 +540,11 @@
     NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
     OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
   changed_when: false
+  failed_when: false
 
 - name: Run OpenClaw status verification
   ansible.builtin.command: "{{ openclaw_cli_path_resolved }} status --all"
+  register: openclaw_status_verify_result
   become: true
   become_user: "{{ openclaw_user }}"
   environment:
@@ -547,6 +552,7 @@
     NODE_COMPILE_CACHE: "{{ openclaw_node_compile_cache_dir }}"
     OPENCLAW_NO_RESPAWN: "{{ 1 if (openclaw_no_respawn | bool) else 0 }}"
   changed_when: false
+  failed_when: false
 
 - name: Run OpenClaw health verification
   ansible.builtin.uri:
