@@ -192,9 +192,12 @@
   changed_when: false
   failed_when: false
 
-- name: Capture Tailscale serve status JSON
-  ansible.builtin.command: tailscale serve status --json
-  register: validate_tailscale_serve_status
+- name: Capture Tailscale serve config via get-config
+  # tailscale serve status --json is known to return inconsistent data
+  # (tailscale/tailscale#18289). get-config --all is the maintainer-recommended
+  # stable query path for programmatic verification.
+  ansible.builtin.command: tailscale serve get-config --all
+  register: validate_tailscale_serve_config
   changed_when: false
   failed_when: false
   when: validate_require_openclaw_tailscale_on | bool
@@ -210,13 +213,17 @@
       or reconnect Tailscale before relying on remote OpenClaw access.
 
 - name: Assert Tailscale serve exposes the OpenClaw gateway port
+  # get-config --all returns JSON where HTTP/HTTPS serve mounts are under Web[port]
+  # and TCP forwards are under TCP[port] with the port as a numeric JSON key.
+  # We search the raw JSON string for the port number to cover both cases.
   ansible.builtin.assert:
     that:
-      - validate_tailscale_serve_status.rc == 0
-      - (validate_tailscale_serve_status.stdout | default('{}') | from_json | to_json) is search('tcp/' ~ (openclaw_gateway_port | default(18789) | string))
+      - validate_tailscale_serve_config.rc == 0
+      - (validate_tailscale_serve_config.stdout | default('')) is search('"' ~ (openclaw_gateway_port | default(18789) | string) ~ '"')
     fail_msg: >-
-      Tailscale serve does not report an OpenClaw mapping for port {{ openclaw_gateway_port | default(18789) }}.
-      Re-run the openclaw playbook or inspect `tailscale serve status --json` on the host.
+      Tailscale serve does not expose port {{ openclaw_gateway_port | default(18789) }}.
+      Re-run the openclaw playbook or run:
+        tailscale serve --bg --http={{ openclaw_gateway_port | default(18789) }} http://127.0.0.1:{{ openclaw_gateway_port | default(18789) }}
   when: validate_require_openclaw_tailscale_on | bool
 
 - name: Functional chat roundtrip validation

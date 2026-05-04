@@ -99,19 +99,25 @@
 
   post_tasks:
     - name: Configure Tailscale serve to expose OpenClaw gateway
+      # --bg makes the mapping persistent across Tailscale restarts.
+      # --http exposes the port over the tailnet (no public internet exposure).
+      # Current syntax (Tailscale >= 1.52); the old `tcp/<port>` form is deprecated.
       ansible.builtin.command: >
-        tailscale serve tcp/{{ openclaw_gateway_port }} http://127.0.0.1:{{ openclaw_gateway_port }}
+        tailscale serve --bg --http={{ openclaw_gateway_port }} http://127.0.0.1:{{ openclaw_gateway_port }}
       register: tailscale_serve_result
       changed_when: false
       failed_when: false
+      become: true
 
-    - name: Verify Tailscale serve is configured for OpenClaw
-      ansible.builtin.command: >
-        tailscale serve status --json
-      register: tailscale_serve_status
+    - name: Capture Tailscale serve config (get-config is the stable query path)
+      # tailscale serve status --json uses the old ServeConfig struct and is known
+      # to return inconsistent data (tailscale/tailscale#18289). get-config --all
+      # is the recommended replacement.
+      ansible.builtin.command: tailscale serve get-config --all
+      register: tailscale_serve_config
       changed_when: false
       failed_when: false
 
     - name: Display Tailscale serve configuration for debugging
       ansible.builtin.debug:
-        var: tailscale_serve_status.stdout | from_json
+        var: tailscale_serve_config.stdout
