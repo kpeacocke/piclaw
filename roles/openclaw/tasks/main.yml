@@ -413,6 +413,17 @@
     mode: "0755"
   become: true
 
+- name: Export Pi-friendly OpenClaw shell environment defaults
+  ansible.builtin.copy:
+    dest: "{{ openclaw_shell_env_path }}"
+    mode: "0644"
+    content: |
+      # Managed by Ansible (piclaw openclaw role).
+      # Keep CLI startup fast and deterministic on low-power hosts.
+      export NODE_COMPILE_CACHE={{ openclaw_node_compile_cache_dir }}
+      export OPENCLAW_NO_RESPAWN={{ 1 if (openclaw_no_respawn | bool) else 0 }}
+  become: true
+
 - name: Install OpenClaw systemd unit
   ansible.builtin.copy:
     dest: /etc/systemd/system/openclaw.service
@@ -532,7 +543,11 @@
     fail_msg: OpenClaw provider URL does not match {{ openclaw_provider_base_url }}.
 
 - name: Run OpenClaw doctor auto-fix
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor --fix"
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf 'y\n' | {{ openclaw_cli_path_resolved }} doctor --fix
+  args:
+    executable: /bin/bash
   register: openclaw_doctor_fix_result
   become: true
   become_user: "{{ openclaw_user }}"
@@ -545,7 +560,11 @@
   when: openclaw_doctor_auto_fix | bool
 
 - name: Run OpenClaw doctor verification
-  ansible.builtin.command: "{{ openclaw_cli_path_resolved }} doctor"
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf 'n\n' | {{ openclaw_cli_path_resolved }} doctor
+  args:
+    executable: /bin/bash
   register: openclaw_doctor_verify_result
   become: true
   become_user: "{{ openclaw_user }}"

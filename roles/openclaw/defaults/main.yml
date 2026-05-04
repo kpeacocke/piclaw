@@ -61,6 +61,7 @@ openclaw_tools_deny:
   - browser
 openclaw_no_respawn: true
 openclaw_node_compile_cache_dir: /var/tmp/openclaw-compile-cache
+openclaw_shell_env_path: /etc/profile.d/openclaw-env.sh
 openclaw_doctor_auto_fix: false
 openclaw_npm_package: openclaw
 openclaw_npm_package_version: "2026.4.2"

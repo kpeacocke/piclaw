@@ -47,11 +47,32 @@
   register: validate_tags
   when: openclaw_use_local_backend | bool
 
+- name: Capture available Hailo model tags during validation
+  ansible.builtin.set_fact:
+    validate_hailo_available_models: "{{ validate_tags.json.models | default([]) | map(attribute='name') | list }}"
+  when: openclaw_use_local_backend | bool
+
+- name: Resolve Hailo runtime model tag during validation
+  ansible.builtin.set_fact:
+    hailo_runtime_model: >-
+      {{
+        (validate_hailo_available_models | select('equalto', hailo_model) | list | first)
+        | default(
+            (validate_hailo_available_models
+             | select('match', '^(' ~ (hailo_model | regex_escape) ~ '|.*/' ~ (hailo_model | regex_escape) ~ ')([._-].*)?$')
+             | list | first),
+            true
+          )
+      }}
+  when: openclaw_use_local_backend | bool
+
 - name: Assert selected model appears in tags
   ansible.builtin.assert:
     that:
-      - (validate_tags.json.models | default([]) | map(attribute='name') | list) is contains(hailo_runtime_model | default(hailo_model))
-    fail_msg: "Model {{ hailo_runtime_model | default(hailo_model) }} not found in backend tags."
+      - (hailo_runtime_model | default('') | length) > 0
+    fail_msg: >-
+      Model {{ hailo_model }} was not found in backend tags.
+      Available tags: {{ validate_hailo_available_models | join(', ') if (validate_hailo_available_models | length > 0) else 'none' }}
   when: openclaw_use_local_backend | bool
 
 - name: Validate proxy endpoint when enabled
