@@ -49,7 +49,7 @@ openclaw_user_config_path: "{{ openclaw_user_config_dir }}/openclaw.json"
 openclaw_auth_profiles_path: "{{ openclaw_user_config_dir }}/agents/main/agent/auth-profiles.json"
 openclaw_gateway_port: 18789
 openclaw_gateway_bind_host: 127.0.0.1
-openclaw_gateway_bind_mode: loopback
+openclaw_gateway_bind_mode: tailnet
 openclaw_gateway_tailscale_mode: "{{ 'serve' if openclaw_gateway_bind_mode == 'loopback' else 'off' }}"
 openclaw_gateway_auth_mode: none
 openclaw_gateway_trusted_proxies:

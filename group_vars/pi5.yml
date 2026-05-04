@@ -17,6 +17,6 @@ tailscale_advertise_exit_node: false
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
 
-# Use loopback bind mode and expose over Tailscale serve for a stable,
-# deterministic remote access path.
-openclaw_gateway_bind_mode: loopback
+# Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
+# OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
+openclaw_gateway_bind_mode: tailnet
