@@ -163,14 +163,6 @@
   changed_when: false
   failed_when: false
 
-- name: Assert OpenClaw reports Tailscale as on
-  ansible.builtin.assert:
-    that:
-      - (validate_openclaw_status_deep.stdout | regex_search('Tailscale\s*│\s*on')) is not none
-    fail_msg: >-
-      OpenClaw status --deep still reports Tailscale off. Check gateway.tailscale.mode and run openclaw doctor.
-  when: validate_require_openclaw_tailscale_on | bool
-
 - name: Capture OpenClaw gateway listeners
   ansible.builtin.command: ss -ltnp
   register: validate_openclaw_listeners
@@ -200,6 +192,13 @@
   changed_when: false
   failed_when: false
 
+- name: Capture Tailscale serve status JSON
+  ansible.builtin.command: tailscale serve status --json
+  register: validate_tailscale_serve_status
+  changed_when: false
+  failed_when: false
+  when: validate_require_openclaw_tailscale_on | bool
+
 - name: Assert Tailscale backend is online
   ansible.builtin.assert:
     that:
@@ -209,6 +208,16 @@
     fail_msg: >-
       Tailscale is offline on this host. Run bootstrap with a valid Tailscale auth credential
       or reconnect Tailscale before relying on remote OpenClaw access.
+
+- name: Assert Tailscale serve exposes the OpenClaw gateway port
+  ansible.builtin.assert:
+    that:
+      - validate_tailscale_serve_status.rc == 0
+      - (validate_tailscale_serve_status.stdout | default('{}') | from_json | to_json) is search('tcp/' ~ (openclaw_gateway_port | default(18789) | string))
+    fail_msg: >-
+      Tailscale serve does not report an OpenClaw mapping for port {{ openclaw_gateway_port | default(18789) }}.
+      Re-run the openclaw playbook or inspect `tailscale serve status --json` on the host.
+  when: validate_require_openclaw_tailscale_on | bool
 
 - name: Functional chat roundtrip validation
   ansible.builtin.uri:
