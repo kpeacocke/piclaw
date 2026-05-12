@@ -47,28 +47,45 @@
   register: validate_tags
   when: openclaw_use_local_backend | bool
 
+- name: Collect Hailo tag model objects during validation
+  ansible.builtin.set_fact:
+    validate_tags_models: >-
+      {{
+        validate_tags.json.models
+        if (
+          validate_tags.json is defined
+          and validate_tags.json is mapping
+          and validate_tags.json.models is defined
+        )
+        else []
+      }}
+  when: openclaw_use_local_backend | bool
+
+- name: Parse tags payload content during validation when json field is unavailable
+  when: openclaw_use_local_backend | bool
+  block:
+    - name: Parse tags content as JSON during validation
+      ansible.builtin.set_fact:
+        validate_tags_models: "{{ ((validate_tags.content | from_json).models | default([])) }}"
+      when:
+        - (validate_tags_models | default([]) | length) == 0
+        - validate_tags.content is defined
+        - (validate_tags.content | trim) is search('^\{')
+  rescue:
+    - name: Fall back to empty model list when tags payload cannot be parsed
+      ansible.builtin.set_fact:
+        validate_tags_models: []
+
 - name: Capture available Hailo model tags during validation
   ansible.builtin.set_fact:
     validate_hailo_available_models: >-
       {{
-        ((
-          (validate_tags_models
-           | map(attribute='name')
-           | list)
+        (
+          (validate_tags_models | selectattr('name', 'defined') | map(attribute='name') | list)
           +
-          (validate_tags_models
-           | map(attribute='model')
-           | list)
+          (validate_tags_models | selectattr('model', 'defined') | map(attribute='model') | list)
         )
-        | select('string')
         | unique
-        | list)
-      }}
-  vars:
-    validate_tags_models: >-
-      {{
-        (validate_tags.json | default({})).models
-        | default((validate_tags.content | default('{"models": []}') | from_json).models)
         | list
       }}
   when: openclaw_use_local_backend | bool

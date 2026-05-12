@@ -98,28 +98,43 @@
     status_code: 200
   register: hailo_tags
 
+- name: Capture model objects from Hailo tags response
+  ansible.builtin.set_fact:
+    hailo_tags_models: >-
+      {{
+        hailo_tags.json.models
+        if (
+          hailo_tags.json is defined
+          and hailo_tags.json is mapping
+          and hailo_tags.json.models is defined
+        )
+        else []
+      }}
+
+- name: Parse tags payload content when json field is unavailable
+  block:
+    - name: Parse tags content as JSON
+      ansible.builtin.set_fact:
+        hailo_tags_models: "{{ ((hailo_tags.content | from_json).models | default([])) }}"
+      when:
+        - (hailo_tags_models | default([]) | length) == 0
+        - hailo_tags.content is defined
+        - (hailo_tags.content | trim) is search('^\{')
+  rescue:
+    - name: Fall back to empty model list when tags payload cannot be parsed
+      ansible.builtin.set_fact:
+        hailo_tags_models: []
+
 - name: Capture available Hailo model tags
   ansible.builtin.set_fact:
     hailo_available_models: >-
       {{
-        ((
-          (hailo_tags_models
-           | map(attribute='name')
-           | list)
+        (
+          (hailo_tags_models | selectattr('name', 'defined') | map(attribute='name') | list)
           +
-          (hailo_tags_models
-           | map(attribute='model')
-           | list)
+          (hailo_tags_models | selectattr('model', 'defined') | map(attribute='model') | list)
         )
-        | select('string')
         | unique
-        | list)
-      }}
-  vars:
-    hailo_tags_models: >-
-      {{
-        (hailo_tags.json | default({})).models
-        | default((hailo_tags.content | default('{"models": []}') | from_json).models)
         | list
       }}
 
