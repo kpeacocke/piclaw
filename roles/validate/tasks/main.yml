@@ -244,10 +244,13 @@
 - name: Assert OpenClaw is configured for direct Tailnet binding
   ansible.builtin.assert:
     that:
-      - (validate_user_cfg_json.gateway.bind | default('loopback')) == 'tailnet'
+      - (openclaw_gateway_bind_mode | default('loopback')) == 'tailnet'
+      - (validate_user_cfg_json.gateway.tailscale.mode | default('serve')) == 'off'
     fail_msg: >
-      OpenClaw is not configured for gateway.bind=tailnet in the user config.
-      This deployment uses direct Tailnet binding for remote access via the Tailscale mesh.
+      OpenClaw is not configured for direct Tailnet binding.
+      Expected openclaw_gateway_bind_mode=tailnet and gateway.tailscale.mode=off;
+      got openclaw_gateway_bind_mode={{ openclaw_gateway_bind_mode | default('undefined') }}
+      and gateway.tailscale.mode={{ validate_user_cfg_json.gateway.tailscale.mode | default('undefined') }}.
   when: validate_require_openclaw_tailscale_on | bool
 
 - name: Functional chat roundtrip validation
