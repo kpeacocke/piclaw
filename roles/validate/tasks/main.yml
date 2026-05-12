@@ -268,6 +268,9 @@
     status_code: 200
     timeout: "{{ chat_smoke_timeout_seconds }}"
   register: validate_chat
+  retries: "{{ chat_smoke_retries }}"
+  delay: "{{ chat_smoke_retry_delay_seconds }}"
+  until: validate_chat.status == 200
   when: openclaw_use_local_backend | bool
 
 - name: Assert functional chat response is non-empty
