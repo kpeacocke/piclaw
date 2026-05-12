@@ -100,7 +100,28 @@
 
 - name: Capture available Hailo model tags
   ansible.builtin.set_fact:
-    hailo_available_models: "{{ hailo_tags.json.models | default([]) | map(attribute='name') | list }}"
+    hailo_available_models: >-
+      {{
+        ((
+          (hailo_tags_models
+           | map(attribute='name')
+           | list)
+          +
+          (hailo_tags_models
+           | map(attribute='model')
+           | list)
+        )
+        | select('string')
+        | unique
+        | list)
+      }}
+  vars:
+    hailo_tags_models: >-
+      {{
+        (hailo_tags.json | default({})).models
+        | default((hailo_tags.content | default('{"models": []}') | from_json).models)
+        | list
+      }}
 
 - name: Resolve Hailo runtime model tag
   ansible.builtin.set_fact:
