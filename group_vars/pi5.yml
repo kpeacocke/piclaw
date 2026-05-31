@@ -50,6 +50,12 @@ nvme_memory_filesystem: ext4
 nvme_memory_label: AI_MEMORY
 nvme_memory_fstab_opts: defaults,noatime
 
+# Raspberry Pi AI Camera (IMX500): install only if detected.
+ai_camera_enabled: true
+ai_camera_require_detection: true
+ai_camera_fail_if_not_detected: false
+ai_camera_install_picamera2_opencv_extras: false
+
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet

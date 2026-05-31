@@ -289,6 +289,61 @@
     - audio_dac_require_hat_detection | bool
     - not base_audio_dac_detected | bool
 
+- name: Detect Raspberry Pi cameras via camera stack tools
+  ansible.builtin.shell: |
+    set -o pipefail
+    if command -v rpicam-hello >/dev/null 2>&1; then
+      rpicam-hello --list-cameras 2>/dev/null || true
+    elif command -v libcamera-hello >/dev/null 2>&1; then
+      libcamera-hello --list-cameras 2>/dev/null || true
+    else
+      true
+    fi
+  args:
+    executable: /bin/bash
+  register: base_ai_camera_list
+  changed_when: false
+  failed_when: false
+
+- name: Compute AI Camera detection state
+  ansible.builtin.set_fact:
+    ai_camera_hw_detected: >-
+      {{
+        ((base_ai_camera_list.stdout | default('')
+          | regex_search(ai_camera_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none)
+      }}
+
+- name: Compute AI Camera application flag
+  ansible.builtin.set_fact:
+    base_ai_camera_should_configure: >-
+      {{
+        (ai_camera_enabled | bool)
+        and
+        ((not ai_camera_require_detection | bool) or ai_camera_hw_detected)
+      }}
+
+- name: Report AI Camera configuration skip when IMX500 is not detected
+  ansible.builtin.debug:
+    msg: >-
+      ai_camera_enabled=true but IMX500 was not detected via camera stack tools;
+      skipping AI Camera package install safely.
+  when:
+    - ai_camera_enabled | bool
+    - ai_camera_require_detection | bool
+    - not ai_camera_hw_detected | bool
+
+- name: Fail when AI Camera detection is required but IMX500 is not detected
+  ansible.builtin.fail:
+    msg: >-
+      ai_camera_enabled=true but IMX500 was not detected.
+      Ensure the camera is connected and enabled, then retry.
+  when:
+    - ai_camera_enabled | bool
+    - ai_camera_require_detection | bool
+    - ai_camera_fail_if_not_detected | bool
+    - not ai_camera_hw_detected | bool
+
 - name: Compute M.2 HAT+ detection state
   ansible.builtin.set_fact:
     base_nvme_memory_hat_detected: >-
@@ -611,6 +666,24 @@
   when: base_audio_dac_should_configure | bool
   become: true
 
+- name: Install Raspberry Pi AI Camera runtime firmware and tools
+  ansible.builtin.apt:
+    name: "{{ ai_camera_install_packages }}"
+    state: present
+  when: base_ai_camera_should_configure | bool
+  register: base_ai_camera_install
+  become: true
+
+- name: Install optional Picamera2 OpenCV extras for AI Camera examples
+  ansible.builtin.apt:
+    name: "{{ ai_camera_picamera2_extra_packages }}"
+    state: present
+  when:
+    - base_ai_camera_should_configure | bool
+    - ai_camera_install_picamera2_opencv_extras | bool
+  register: base_ai_camera_extras_install
+  become: true
+
 - name: Check installed Node.js version
   ansible.builtin.command: node --version
   register: base_node_version
@@ -670,6 +743,8 @@
     post_reboot_delay: 10
   when:
     - reboot_required.stat.exists or eeprom_update.changed or
+      (base_ai_camera_install is defined and base_ai_camera_install.changed) or
+      (base_ai_camera_extras_install is defined and base_ai_camera_extras_install.changed) or
       (base_dac_audio_dtparam_config is defined and base_dac_audio_dtparam_config.changed) or
       (base_dac_overlay_config is defined and base_dac_overlay_config.changed)
   become: true

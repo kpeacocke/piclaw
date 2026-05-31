@@ -279,3 +279,58 @@
       - (validate_chat.json.message.content | default('') | trim | length) > 0
     fail_msg: Functional chat roundtrip did not return content.
   when: openclaw_use_local_backend | bool
+
+- name: Detect cameras with rpicam tool during validation
+  ansible.builtin.command: rpicam-hello --list-cameras
+  register: validate_rpicam_camera_list
+  changed_when: false
+  failed_when: false
+
+- name: Detect cameras with libcamera tool during validation
+  ansible.builtin.command: libcamera-hello --list-cameras
+  register: validate_libcamera_camera_list
+  changed_when: false
+  failed_when: false
+
+- name: Select camera enumeration output for AI Camera validation
+  ansible.builtin.set_fact:
+    validate_ai_camera_list_output: >-
+      {{
+        (validate_rpicam_camera_list.stdout | default('') | trim)
+        if (validate_rpicam_camera_list.rc | default(1)) == 0
+        else (validate_libcamera_camera_list.stdout | default('') | trim)
+      }}
+
+- name: Compute AI Camera detection state during validation
+  ansible.builtin.set_fact:
+    validate_ai_camera_detected: >-
+      {{
+        ((validate_ai_camera_list_output | default('')
+          | regex_search(ai_camera_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none)
+      }}
+
+- name: Report AI Camera detection during validation
+  ansible.builtin.debug:
+    msg: "AI Camera detected (IMX500): {{ validate_ai_camera_detected | bool }}"
+
+- name: Stat expected AI Camera firmware files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ validate_ai_camera_firmware_files }}"
+  register: validate_ai_camera_firmware_stats
+  when:
+    - ai_camera_enabled | bool
+    - validate_ai_camera_check_firmware_files | bool
+    - (not ai_camera_require_detection | bool) or (validate_ai_camera_detected | bool)
+
+- name: Assert AI Camera firmware files exist when required
+  ansible.builtin.assert:
+    that:
+      - (validate_ai_camera_firmware_stats.results | selectattr('stat.exists', 'equalto', true) | list | length) == (validate_ai_camera_firmware_files | length)
+    fail_msg: >-
+      AI Camera firmware files are missing. Expected: {{ validate_ai_camera_firmware_files | join(', ') }}.
+  when:
+    - ai_camera_enabled | bool
+    - validate_ai_camera_check_firmware_files | bool
+    - (not ai_camera_require_detection | bool) or (validate_ai_camera_detected | bool)

@@ -32,3 +32,14 @@ chat_smoke_retry_delay_seconds: 5
 validate_require_openclaw_tailscale_on: true
 openclaw_validate_user: "{{ pi_user | default(ansible_user | default('pi')) }}"
 openclaw_validate_user_home: "/home/{{ openclaw_validate_user }}"
+
+# Optional Raspberry Pi AI Camera (IMX500) validation controls.
+ai_camera_enabled: false
+ai_camera_require_detection: true
+ai_camera_detect_match_patterns:
+  - imx500
+  - ai camera
+validate_ai_camera_check_firmware_files: true
+validate_ai_camera_firmware_files:
+  - /lib/firmware/imx500_loader.fpk
+  - /lib/firmware/imx500_firmware.fpk

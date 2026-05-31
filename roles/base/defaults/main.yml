@@ -81,3 +81,18 @@ audio_dac_alsa_card_match_patterns:
   - iqaudio
   - hifiberry
   - dac
+
+# Optional Raspberry Pi AI Camera (IMX500) support.
+# Official docs require installing `imx500-all` on Raspberry Pi OS.
+ai_camera_enabled: false
+ai_camera_require_detection: true
+ai_camera_fail_if_not_detected: false
+ai_camera_detect_match_patterns:
+  - imx500
+  - ai camera
+ai_camera_install_packages:
+  - imx500-all
+ai_camera_install_picamera2_opencv_extras: false
+ai_camera_picamera2_extra_packages:
+  - python3-opencv
+  - python3-munkres
