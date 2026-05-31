@@ -289,6 +289,295 @@
     - audio_dac_require_hat_detection | bool
     - not base_audio_dac_detected | bool
 
+- name: Compute M.2 HAT+ detection state
+  ansible.builtin.set_fact:
+    base_nvme_memory_hat_detected: >-
+      {{
+        ((((base_hat_vendor | default('') | trim) ~ ' ' ~ (base_hat_product | default('') | trim))
+          | regex_search(nvme_memory_hat_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none)
+      }}
+
+- name: Compute NVMe memory provisioning flag
+  ansible.builtin.set_fact:
+    base_nvme_memory_should_configure: >-
+      {{
+        (nvme_memory_enabled | bool)
+        and
+        ((not nvme_memory_require_hat_detection | bool) or base_nvme_memory_hat_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for NVMe PCIe enablement
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ nvme_memory_boot_config_candidates }}"
+  register: base_nvme_boot_config_probe
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+
+- name: Select detected Raspberry Pi boot config path for NVMe PCIe enablement
+  ansible.builtin.set_fact:
+    base_nvme_boot_config_path: >-
+      {{
+        (
+          base_nvme_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+
+- name: Warn when no Raspberry Pi boot config path is detected for NVMe PCIe enablement
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ nvme_memory_boot_config_candidates }};
+      skipping NVMe PCIe config safely.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+    - (base_nvme_boot_config_path | default('') | length) == 0
+
+- name: Fail when NVMe PCIe boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ nvme_memory_boot_config_candidates }}.
+      Cannot apply NVMe PCIe config safely on this OS/image.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+    - nvme_memory_fail_if_boot_config_missing | bool
+    - (base_nvme_boot_config_path | default('') | length) == 0
+
+- name: Ensure PCIe interface is explicitly enabled for NVMe
+  ansible.builtin.lineinfile:
+    path: "{{ base_nvme_boot_config_path }}"
+    regexp: '^dtparam=pciex1($|=)'
+    line: dtparam=pciex1
+    state: present
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+    - (base_nvme_boot_config_path | default('') | length) > 0
+  register: nvme_pcie_enable_config
+  become: true
+
+- name: Reboot after NVMe PCIe configuration change
+  ansible.builtin.reboot:
+    msg: Reboot initiated by Ansible after NVMe PCIe configuration.
+    reboot_timeout: 900
+    post_reboot_delay: 10
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_pcie_enable_config is defined
+    - nvme_pcie_enable_config.changed
+  become: true
+
+- name: Report NVMe configuration skip when M.2 HAT+ is not detected
+  ansible.builtin.debug:
+    msg: >-
+      nvme_memory_enabled=true but no matching M.2 HAT+ was detected;
+      skipping NVMe memory provisioning. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}'.
+  when:
+    - nvme_memory_enabled | bool
+    - nvme_memory_require_hat_detection | bool
+    - not base_nvme_memory_hat_detected | bool
+
+- name: Detect root filesystem source device
+  ansible.builtin.command: findmnt -n -o SOURCE /
+  register: base_root_source
+  changed_when: false
+  failed_when: false
+  when: base_nvme_memory_should_configure | bool
+
+- name: Detect root parent block device
+  ansible.builtin.command: "lsblk -no PKNAME {{ base_root_source.stdout | trim }}"
+  register: base_root_parent
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_root_source.stdout | default('') | trim) is match('^/dev/')
+
+- name: List block devices for NVMe selection
+  ansible.builtin.command: lsblk -J -o NAME,TYPE,PATH
+  register: base_lsblk_json
+  changed_when: false
+  failed_when: false
+  when: base_nvme_memory_should_configure | bool
+
+- name: Compute candidate NVMe disks
+  ansible.builtin.set_fact:
+    base_nvme_disks: >-
+      {{
+        ((base_lsblk_json.stdout | default('{"blockdevices": []}') | from_json).blockdevices
+          | selectattr('type', 'equalto', 'disk')
+          | selectattr('name', 'match', '^nvme')
+          | map(attribute='path')
+          | list)
+      }}
+    base_root_parent_path: >-
+      {{
+        '/dev/' ~ (base_root_parent.stdout | default('') | trim)
+        if (
+          base_root_parent is defined
+          and (base_root_parent.stdout | default('') | trim | length) > 0
+        )
+        else ''
+      }}
+  when: base_nvme_memory_should_configure | bool
+
+- name: Select NVMe target disk
+  ansible.builtin.set_fact:
+    base_nvme_target_disk: >-
+      {{
+        (nvme_memory_target_device | trim)
+        if (nvme_memory_target_device | default('') | trim | length) > 0
+        else
+        ((base_nvme_disks | reject('equalto', base_root_parent_path) | list | first) | default(''))
+      }}
+  when: base_nvme_memory_should_configure | bool
+
+- name: Warn when no eligible NVMe disk is found
+  ansible.builtin.debug:
+    msg: >-
+      No eligible non-root NVMe disk found for provisioning; skipping.
+      root_source='{{ base_root_source.stdout | default('') | trim }}',
+      root_parent='{{ base_root_parent_path | default('') }}',
+      nvme_disks={{ base_nvme_disks | default([]) }}.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_disk | default('') | length) == 0
+
+- name: Fail when NVMe target disk is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      nvme_memory_enabled=true but no eligible non-root NVMe disk was found.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_fail_if_no_device | bool
+    - (base_nvme_target_disk | default('') | length) == 0
+
+- name: Read selected NVMe disk topology
+  ansible.builtin.command: "lsblk -J -o NAME,TYPE,PATH {{ base_nvme_target_disk }}"
+  register: base_nvme_target_topology
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_disk | default('') | length) > 0
+
+- name: Compute selected NVMe block device for filesystem/mount
+  ansible.builtin.set_fact:
+    base_nvme_target_block: >-
+      {{
+        (
+          (
+            ((base_nvme_target_topology.stdout | from_json).blockdevices | first).children
+            | default([])
+            | selectattr('type', 'equalto', 'part')
+            | map(attribute='path')
+            | list
+            | first
+          )
+          if (nvme_memory_use_first_partition_if_present | bool)
+          else ''
+        )
+        | default(base_nvme_target_disk, true)
+      }}
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_disk | default('') | length) > 0
+
+- name: Detect filesystem type on selected NVMe block
+  ansible.builtin.command: "lsblk -no FSTYPE {{ base_nvme_target_block }}"
+  register: base_nvme_fstype
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_block | default('') | length) > 0
+
+- name: Create filesystem on selected NVMe block only when missing
+  ansible.builtin.command: >-
+    mkfs.{{ nvme_memory_filesystem }} -F -L {{ nvme_memory_label }} {{ base_nvme_target_block }}
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_block | default('') | length) > 0
+    - (base_nvme_fstype.stdout | default('') | trim | length) == 0
+  register: base_nvme_mkfs
+  become: true
+
+- name: Resolve UUID for selected NVMe block
+  ansible.builtin.command: "blkid -s UUID -o value {{ base_nvme_target_block }}"
+  register: base_nvme_uuid
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_block | default('') | length) > 0
+
+- name: Fail when UUID is required but missing for NVMe target
+  ansible.builtin.fail:
+    msg: >-
+      Could not resolve UUID for NVMe target {{ base_nvme_target_block }}; refusing to write fstab.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_fail_if_no_uuid | bool
+    - (base_nvme_target_block | default('') | length) > 0
+    - (base_nvme_uuid.stdout | default('') | trim | length) == 0
+
+- name: Ensure NVMe mount point exists
+  ansible.builtin.file:
+    path: "{{ nvme_memory_mount_point }}"
+    state: directory
+    owner: "{{ nvme_memory_mount_owner }}"
+    group: "{{ nvme_memory_mount_group }}"
+    mode: "{{ nvme_memory_mount_mode }}"
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+  become: true
+
+- name: Ensure NVMe fstab entry is present
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^[^#].*\\s{{ nvme_memory_mount_point | regex_escape }}\\s"
+    line: "UUID={{ base_nvme_uuid.stdout | trim }} {{ nvme_memory_mount_point }} {{ nvme_memory_filesystem }} {{ nvme_memory_fstab_opts }} 0 2"
+    state: present
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+  register: base_nvme_fstab
+  become: true
+
+- name: Check if NVMe mount point is already mounted
+  ansible.builtin.command: "mountpoint -q {{ nvme_memory_mount_point }}"
+  register: base_nvme_mountpoint
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+
+- name: Mount NVMe filesystem from fstab
+  ansible.posix.mount:
+    path: "{{ nvme_memory_mount_point }}"
+    src: "UUID={{ base_nvme_uuid.stdout | trim }}"
+    fstype: "{{ nvme_memory_filesystem }}"
+    opts: "{{ nvme_memory_fstab_opts }}"
+    state: mounted
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+  become: true
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true

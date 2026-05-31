@@ -25,6 +25,31 @@ pcie_force_enable_boot_config_candidates:
   - /boot/firmware/config.txt
   - /boot/config.txt
 
+# Optional NVMe long-term memory provisioning for Raspberry Pi M.2 HAT+ (SC1166).
+# Uses detect-and-configure flow and only formats when no filesystem is present.
+nvme_memory_enabled: false
+nvme_memory_require_hat_detection: true
+nvme_memory_fail_if_no_device: false
+nvme_memory_fail_if_boot_config_missing: false
+nvme_memory_fail_if_no_uuid: true
+nvme_memory_ensure_pcie_enabled: true
+nvme_memory_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+nvme_memory_hat_match_patterns:
+  - Raspberry Pi M.2 HAT+
+  - M.2 HAT+
+  - SC1166
+nvme_memory_target_device: ""
+nvme_memory_use_first_partition_if_present: true
+nvme_memory_filesystem: ext4
+nvme_memory_label: AI_MEMORY
+nvme_memory_mount_point: /srv/ai-memory
+nvme_memory_mount_owner: "{{ pi_user | default('pi') }}"
+nvme_memory_mount_group: "{{ pi_user | default('pi') }}"
+nvme_memory_mount_mode: "0775"
+nvme_memory_fstab_opts: defaults,noatime
+
 # OpenClaw currently requires Node.js >= 22.12.0.
 # Keep Node.js on the latest release for the selected major channel.
 bootstrap_nodejs_major: 24

@@ -39,6 +39,17 @@ audio_dac_configure_alsa_default: true
 audio_dac_verify_playback_device: true
 audio_dac_fail_if_alsa_card_missing: false
 
+# Official Raspberry Pi M.2 HAT+ (SC1166) NVMe memory mount for AI persistence.
+# Safe mode: detection-gated and only formats when no filesystem is present.
+nvme_memory_enabled: true
+nvme_memory_require_hat_detection: true
+nvme_memory_fail_if_no_device: false
+nvme_memory_ensure_pcie_enabled: true
+nvme_memory_mount_point: /srv/ai-memory
+nvme_memory_filesystem: ext4
+nvme_memory_label: AI_MEMORY
+nvme_memory_fstab_opts: defaults,noatime
+
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet
