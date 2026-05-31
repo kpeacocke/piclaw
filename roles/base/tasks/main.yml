@@ -289,6 +289,176 @@
     - audio_dac_require_hat_detection | bool
     - not base_audio_dac_detected | bool
 
+- name: Detect DSI display connectors and modes
+  ansible.builtin.shell: |
+    set -o pipefail
+    for node in /sys/class/drm/card*-DSI-*; do
+      [ -d "$node" ] || continue
+      status="$(cat "$node/status" 2>/dev/null || true)"
+      modes="$(tr '\n' ' ' < "$node/modes" 2>/dev/null || true)"
+      printf '%s status=%s modes=%s\n' "$node" "$status" "$modes"
+    done
+  args:
+    executable: /bin/bash
+  register: base_touch_display2_drm
+  changed_when: false
+  failed_when: false
+
+- name: Compute Touch Display 2 detection state
+  ansible.builtin.set_fact:
+    base_touch_display2_detected: >-
+      {{
+        (
+          (base_touch_display2_drm.stdout | default('')
+            | regex_search('status=connected', ignorecase=True)) is not none
+        )
+        and
+        (
+          (base_touch_display2_drm.stdout | default('')
+            | regex_search(touch_display2_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+      }}
+
+- name: Compute Touch Display 2 application flag
+  ansible.builtin.set_fact:
+    base_touch_display2_should_configure: >-
+      {{
+        (touch_display2_enabled | bool)
+        and
+        ((not touch_display2_require_detection | bool) or base_touch_display2_detected)
+      }}
+
+- name: Compute Touch Display 2 boot-config edit requirement
+  ansible.builtin.set_fact:
+    base_touch_display2_should_edit_boot_config: >-
+      {{
+        (touch_display2_force_display_auto_detect | bool)
+        or (touch_display2_disable_touchscreen | bool)
+        or (touch_display2_configure_touch_overlay | bool)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for Touch Display 2
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ touch_display2_boot_config_candidates }}"
+  register: base_touch_display2_boot_config_probe
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+
+- name: Select detected Raspberry Pi boot config path for Touch Display 2
+  ansible.builtin.set_fact:
+    base_touch_display2_boot_config_path: >-
+      {{
+        (
+          base_touch_display2_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+
+- name: Warn when no boot config path is detected for Touch Display 2
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ touch_display2_boot_config_candidates }};
+      skipping Touch Display 2 config safely.
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+    - (base_touch_display2_boot_config_path | default('') | length) == 0
+
+- name: Fail when Touch Display 2 boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ touch_display2_boot_config_candidates }}.
+      Cannot apply Touch Display 2 config safely on this OS/image.
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+    - touch_display2_fail_if_boot_config_missing | bool
+    - (base_touch_display2_boot_config_path | default('') | length) == 0
+
+- name: Ensure display auto-detection is enabled for Touch Display 2
+  ansible.builtin.lineinfile:
+    path: "{{ base_touch_display2_boot_config_path }}"
+    regexp: '^display_auto_detect='
+    line: display_auto_detect=1
+    state: present
+  when:
+    - base_touch_display2_should_configure | bool
+    - touch_display2_force_display_auto_detect | bool
+    - (base_touch_display2_boot_config_path | default('') | length) > 0
+  register: base_touch_display2_auto_detect_config
+  become: true
+
+- name: Ensure touchscreen disable line state for Touch Display 2
+  ansible.builtin.lineinfile:
+    path: "{{ base_touch_display2_boot_config_path }}"
+    regexp: '^disable_touchscreen='
+    line: disable_touchscreen=1
+    state: "{{ 'present' if (touch_display2_disable_touchscreen | bool) else 'absent' }}"
+  when:
+    - base_touch_display2_should_configure | bool
+    - (base_touch_display2_boot_config_path | default('') | length) > 0
+  register: base_touch_display2_disable_touch_config
+  become: true
+
+- name: Compute Touch Display 2 overlay line
+  ansible.builtin.set_fact:
+    base_touch_display2_overlay_line: >-
+      {{
+        'dtoverlay=vc4-kms-dsi-ili9881-' ~ touch_display2_model
+        ~ (
+          ',' ~ (touch_display2_touch_overlay_options | join(','))
+          if (touch_display2_touch_overlay_options | length) > 0
+          else ''
+        )
+      }}
+  when:
+    - base_touch_display2_should_configure | bool
+    - touch_display2_configure_touch_overlay | bool
+
+- name: Ensure Touch Display 2 overlay line is present when requested
+  ansible.builtin.lineinfile:
+    path: "{{ base_touch_display2_boot_config_path }}"
+    regexp: '^dtoverlay=vc4-kms-dsi-ili9881-(5inch|7inch)(,.*)?$'
+    line: "{{ base_touch_display2_overlay_line }}"
+    state: present
+  when:
+    - base_touch_display2_should_configure | bool
+    - touch_display2_configure_touch_overlay | bool
+    - (base_touch_display2_boot_config_path | default('') | length) > 0
+  register: base_touch_display2_overlay_config
+  become: true
+
+- name: Report Touch Display 2 configuration skip when panel is not detected
+  ansible.builtin.debug:
+    msg: >-
+      touch_display2_enabled=true but Touch Display 2 was not detected;
+      skipping Touch Display 2 config. drm='{{ base_touch_display2_drm.stdout | default('') | trim }}'.
+  when:
+    - touch_display2_enabled | bool
+    - touch_display2_require_detection | bool
+    - not base_touch_display2_detected | bool
+
+- name: Fail when Touch Display 2 detection is required but panel is not detected
+  ansible.builtin.fail:
+    msg: >-
+      touch_display2_enabled=true but Touch Display 2 was not detected.
+      Check DSI and GPIO power cabling, then retry.
+  when:
+    - touch_display2_enabled | bool
+    - touch_display2_require_detection | bool
+    - touch_display2_fail_if_not_detected | bool
+    - not base_touch_display2_detected | bool
+
 - name: Detect Raspberry Pi cameras via camera stack tools
   ansible.builtin.shell: |
     set -o pipefail
@@ -743,6 +913,9 @@
     post_reboot_delay: 10
   when:
     - reboot_required.stat.exists or eeprom_update.changed or
+      (base_touch_display2_auto_detect_config is defined and base_touch_display2_auto_detect_config.changed) or
+      (base_touch_display2_disable_touch_config is defined and base_touch_display2_disable_touch_config.changed) or
+      (base_touch_display2_overlay_config is defined and base_touch_display2_overlay_config.changed) or
       (base_ai_camera_install is defined and base_ai_camera_install.changed) or
       (base_ai_camera_extras_install is defined and base_ai_camera_extras_install.changed) or
       (base_dac_audio_dtparam_config is defined and base_dac_audio_dtparam_config.changed) or

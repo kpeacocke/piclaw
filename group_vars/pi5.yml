@@ -56,6 +56,16 @@ ai_camera_require_detection: true
 ai_camera_fail_if_not_detected: false
 ai_camera_install_picamera2_opencv_extras: false
 
+# Raspberry Pi Touch Display 2: configure only if detected.
+touch_display2_enabled: true
+touch_display2_require_detection: true
+touch_display2_fail_if_not_detected: false
+touch_display2_force_display_auto_detect: true
+touch_display2_disable_touchscreen: false
+touch_display2_configure_touch_overlay: false
+touch_display2_model: 7inch
+touch_display2_touch_overlay_options: []
+
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet

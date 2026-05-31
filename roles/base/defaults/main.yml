@@ -96,3 +96,23 @@ ai_camera_install_picamera2_opencv_extras: false
 ai_camera_picamera2_extra_packages:
   - python3-opencv
   - python3-munkres
+
+# Optional Raspberry Pi Touch Display 2 setup.
+# On Pi B+ and later, display is auto-detected; these options keep config safe
+# and allow optional touch overlay tuning when needed.
+touch_display2_enabled: false
+touch_display2_require_detection: true
+touch_display2_fail_if_not_detected: false
+touch_display2_fail_if_boot_config_missing: false
+touch_display2_detect_match_patterns:
+  - 720x1280
+  - ili9881
+  - touch display 2
+touch_display2_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+touch_display2_force_display_auto_detect: true
+touch_display2_disable_touchscreen: false
+touch_display2_configure_touch_overlay: false
+touch_display2_model: 7inch
+touch_display2_touch_overlay_options: []
