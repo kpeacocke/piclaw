@@ -442,7 +442,8 @@
   ansible.builtin.debug:
     msg: >-
       touch_display2_enabled=true but Touch Display 2 was not detected;
-      skipping Touch Display 2 config. drm='{{ base_touch_display2_drm.stdout | default('') | trim }}'.
+      skipping Touch Display 2 config.
+      drm='{{ base_touch_display2_drm.stdout | default('') | trim }}'.
   when:
     - touch_display2_enabled | bool
     - touch_display2_require_detection | bool
@@ -701,6 +702,230 @@
     - ups_hat_e_require_detection | bool
     - ups_hat_e_fail_if_not_detected | bool
     - not base_ups_hat_e_detected | bool
+
+- name: Read Raspberry Pi model for UART e-paper serial setup
+  ansible.builtin.shell: |
+    set -o pipefail
+    tr -d '\0' < /proc/device-tree/model
+  args:
+    executable: /bin/bash
+  register: base_model_raw
+  changed_when: false
+  failed_when: false
+  when: uart_epaper_enabled | bool
+
+- name: Compute UART e-paper model facts
+  ansible.builtin.set_fact:
+    base_is_pi5: >-
+      {{
+        (base_model_raw.stdout | default('') | regex_search('Raspberry Pi 5', ignorecase=True))
+        is not none
+      }}
+    base_uart_epaper_should_configure: "{{ uart_epaper_enabled | bool }}"
+    base_uart_epaper_should_edit_boot_config: >-
+      {{
+        (uart_epaper_enable_hardware_uart | bool)
+        or (uart_epaper_reserve_gpio_wakeup | bool)
+        or (uart_epaper_reserve_gpio_reset | bool)
+      }}
+  when: uart_epaper_enabled | bool
+
+- name: Probe Raspberry Pi boot config candidate paths for UART e-paper
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ uart_epaper_boot_config_candidates }}"
+  register: base_uart_epaper_boot_config_probe
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+
+- name: Select detected Raspberry Pi boot config path for UART e-paper
+  ansible.builtin.set_fact:
+    base_uart_epaper_boot_config_path: >-
+      {{
+        (
+          base_uart_epaper_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+
+- name: Warn when no boot config path is detected for UART e-paper
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ uart_epaper_boot_config_candidates }};
+      skipping UART e-paper boot config safely.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) == 0
+
+- name: Fail when UART e-paper boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ uart_epaper_boot_config_candidates }}.
+      Cannot apply UART e-paper settings safely on this OS/image.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+    - uart_epaper_fail_if_boot_config_missing | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) == 0
+
+- name: Probe cmdline candidate paths for UART e-paper serial console setting
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ uart_epaper_cmdline_candidates }}"
+  register: base_uart_epaper_cmdline_probe
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+
+- name: Select detected cmdline path for UART e-paper serial console setting
+  ansible.builtin.set_fact:
+    base_uart_epaper_cmdline_path: >-
+      {{
+        (
+          base_uart_epaper_cmdline_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+
+- name: Warn when no cmdline path is detected for UART e-paper
+  ansible.builtin.debug:
+    msg: >-
+      No supported cmdline path detected from candidates={{ uart_epaper_cmdline_candidates }};
+      skipping serial-console disable safely.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) == 0
+
+- name: Fail when UART e-paper cmdline path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported cmdline file found in {{ uart_epaper_cmdline_candidates }}.
+      Cannot disable serial console safely on this OS/image.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - uart_epaper_fail_if_cmdline_missing | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) == 0
+
+- name: Enable UART hardware on Raspberry Pi 5 for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^dtparam=uart0='
+    line: dtparam=uart0=on
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_enable_hardware_uart | bool
+    - base_is_pi5 | bool
+    - uart_epaper_configure_pi5_uart0 | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_hw_uart_config
+  become: true
+
+- name: Enable UART hardware on non-Pi5 for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^enable_uart='
+    line: enable_uart=1
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_enable_hardware_uart | bool
+    - not (base_is_pi5 | bool)
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_hw_uart_config
+  become: true
+
+- name: Reserve WAKE_UP GPIO for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^gpio={{ uart_epaper_wakeup_gpio }}='
+    line: "gpio={{ uart_epaper_wakeup_gpio }}=op,{{ uart_epaper_wakeup_gpio_state }}"
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_reserve_gpio_wakeup | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_gpio_wakeup_config
+  become: true
+
+- name: Reserve RST GPIO for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^gpio={{ uart_epaper_reset_gpio }}='
+    line: "gpio={{ uart_epaper_reset_gpio }}=op,{{ uart_epaper_reset_gpio_state }}"
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_reserve_gpio_reset | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_gpio_reset_config
+  become: true
+
+- name: Remove serial console mapping from cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: '(^| )console=(serial0|ttyAMA0|ttyS0),[0-9]+(?= |$)'
+    replace: ''
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_console_strip
+  become: true
+
+- name: Normalize extra whitespace in cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: ' {2,}'
+    replace: ' '
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_whitespace
+  become: true
+
+- name: Remove leading whitespace in cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: '^ '
+    replace: ''
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_leading
+  become: true
+
+- name: Remove trailing whitespace in cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: ' $'
+    replace: ''
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_trailing
+  become: true
 
 - name: Detect Raspberry Pi cameras via camera stack tools
   ansible.builtin.shell: |
@@ -1113,6 +1338,106 @@
   register: base_ups_hat_e_install
   become: true
 
+- name: Install pyserial for UART e-paper
+  ansible.builtin.apt:
+    name: "{{ uart_epaper_pyserial_package }}"
+    state: present
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - uart_epaper_install_pyserial | bool
+  register: base_uart_epaper_pyserial_install
+  become: true
+
+- name: Ensure UART e-paper application directory exists
+  ansible.builtin.file:
+    path: "{{ uart_epaper_app_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: base_uart_epaper_should_configure | default(false) | bool
+  become: true
+
+- name: Deploy UART e-paper application script
+  ansible.builtin.copy:
+    src: epaper.py
+    dest: "{{ uart_epaper_app_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: base_uart_epaper_should_configure | default(false) | bool
+  register: base_uart_epaper_app_deploy
+  become: true
+
+- name: Deploy UART e-paper systemd unit
+  ansible.builtin.template:
+    src: uart-epaper.service.j2
+    dest: "/etc/systemd/system/{{ uart_epaper_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  when: base_uart_epaper_should_configure | default(false) | bool
+  register: base_uart_epaper_service_unit
+  become: true
+
+- name: Probe UART device nodes for e-paper service
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: >-
+    {{
+      ['/dev/ttyAMA0', '/dev/serial0', '/dev/ttyS0']
+      if (uart_epaper_serial_device | lower) == 'auto'
+      else [uart_epaper_serial_device]
+    }}
+  register: base_uart_epaper_serial_nodes
+  when: base_uart_epaper_should_configure | default(false) | bool
+
+- name: Compute UART e-paper serial-node availability
+  ansible.builtin.set_fact:
+    base_uart_epaper_serial_node_available: >-
+      {{
+        (
+          base_uart_epaper_serial_nodes.results
+          | selectattr('stat.exists', 'equalto', true)
+          | list
+          | length
+        ) > 0
+      }}
+  when: base_uart_epaper_should_configure | default(false) | bool
+
+- name: Warn when UART e-paper serial node is not available
+  ansible.builtin.debug:
+    msg: >-
+      UART e-paper enabled but no serial node is currently present for
+      serial_device={{ uart_epaper_serial_device }}.
+      Checked: {{ base_uart_epaper_serial_nodes.results | map(attribute='stat.path') | list }}.
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - uart_epaper_require_serial_device | bool
+    - not (base_uart_epaper_serial_node_available | default(false) | bool)
+
+- name: Fail when UART e-paper serial node is required but not available
+  ansible.builtin.fail:
+    msg: >-
+      uart_epaper_enabled=true but no required UART serial device is available.
+      Expected serial_device={{ uart_epaper_serial_device }}.
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - uart_epaper_require_serial_device | bool
+    - uart_epaper_fail_if_serial_device_missing | bool
+    - not (base_uart_epaper_serial_node_available | default(false) | bool)
+
+- name: Ensure UART e-paper service is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ uart_epaper_service_name }}"
+    enabled: true
+    daemon_reload: true
+    state: restarted
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - (base_uart_epaper_serial_node_available | default(false) | bool) or not (uart_epaper_require_serial_device | bool)
+  become: true
+
 - name: Check installed Node.js version
   ansible.builtin.command: node --version
   register: base_node_version
@@ -1177,6 +1502,13 @@
       (base_ups_hat_e_install is defined and base_ups_hat_e_install.changed) or
       (base_sense_hat_i2c_config is defined and base_sense_hat_i2c_config.changed) or
       (base_sense_hat_install is defined and base_sense_hat_install.changed) or
+      (base_uart_epaper_hw_uart_config is defined and base_uart_epaper_hw_uart_config.changed) or
+      (base_uart_epaper_gpio_wakeup_config is defined and base_uart_epaper_gpio_wakeup_config.changed) or
+      (base_uart_epaper_gpio_reset_config is defined and base_uart_epaper_gpio_reset_config.changed) or
+      (base_uart_epaper_cmdline_console_strip is defined and base_uart_epaper_cmdline_console_strip.changed) or
+      (base_uart_epaper_cmdline_whitespace is defined and base_uart_epaper_cmdline_whitespace.changed) or
+      (base_uart_epaper_cmdline_leading is defined and base_uart_epaper_cmdline_leading.changed) or
+      (base_uart_epaper_cmdline_trailing is defined and base_uart_epaper_cmdline_trailing.changed) or
       (base_touch_display2_auto_detect_config is defined and base_touch_display2_auto_detect_config.changed) or
       (base_touch_display2_disable_touch_config is defined and base_touch_display2_disable_touch_config.changed) or
       (base_touch_display2_overlay_config is defined and base_touch_display2_overlay_config.changed) or

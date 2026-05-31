@@ -82,3 +82,18 @@ ups_hat_e_enable_usb_max_current: true
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet
+
+# Waveshare 4.3" UART e-Paper module wiring and service automation.
+uart_epaper_enabled: true
+uart_epaper_enable_hardware_uart: true
+uart_epaper_disable_serial_console: true
+uart_epaper_reserve_gpio_wakeup: true
+uart_epaper_wakeup_gpio: 26
+uart_epaper_wakeup_gpio_state: dl
+uart_epaper_reserve_gpio_reset: true
+uart_epaper_reset_gpio: 27
+uart_epaper_reset_gpio_state: dh
+uart_epaper_install_pyserial: true
+uart_epaper_serial_device: auto
+uart_epaper_baud_rate: 115200
+uart_epaper_refresh_seconds: 300

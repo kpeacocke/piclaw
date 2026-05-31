@@ -153,3 +153,38 @@ ups_hat_e_enable_usb_max_current: false
 ups_hat_e_install_packages:
   - i2c-tools
   - python3-smbus
+
+# Optional Waveshare 4.3" UART e-Paper support.
+# Uses the same behavior as raspi-config serial settings:
+# - serial console disabled
+# - serial hardware enabled
+uart_epaper_enabled: false
+uart_epaper_enable_hardware_uart: true
+uart_epaper_disable_serial_console: true
+uart_epaper_configure_pi5_uart0: true
+uart_epaper_require_serial_device: true
+uart_epaper_fail_if_serial_device_missing: false
+uart_epaper_fail_if_boot_config_missing: false
+uart_epaper_fail_if_cmdline_missing: false
+uart_epaper_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+uart_epaper_cmdline_candidates:
+  - /boot/firmware/cmdline.txt
+  - /boot/cmdline.txt
+uart_epaper_reserve_gpio_wakeup: true
+uart_epaper_wakeup_gpio: 26
+uart_epaper_wakeup_gpio_state: dl
+uart_epaper_reserve_gpio_reset: true
+uart_epaper_reset_gpio: 27
+uart_epaper_reset_gpio_state: dh
+uart_epaper_install_pyserial: true
+uart_epaper_pyserial_package: python3-serial
+uart_epaper_service_name: uart-epaper
+uart_epaper_service_user: root
+uart_epaper_service_group: root
+uart_epaper_app_dir: /opt/piclaw/epaper
+uart_epaper_app_path: /opt/piclaw/epaper/epaper.py
+uart_epaper_serial_device: auto
+uart_epaper_baud_rate: 115200
+uart_epaper_refresh_seconds: 300

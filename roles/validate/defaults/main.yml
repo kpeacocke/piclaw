@@ -79,3 +79,22 @@ validate_ups_hat_e_check_packages: true
 validate_ups_hat_e_packages:
   - i2c-tools
   - python3-smbus
+
+# Optional Waveshare 4.3" UART e-Paper validation controls.
+uart_epaper_enabled: false
+uart_epaper_require_serial_device: true
+uart_epaper_serial_device: auto
+uart_epaper_service_name: uart-epaper
+uart_epaper_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+uart_epaper_cmdline_candidates:
+  - /boot/firmware/cmdline.txt
+  - /boot/cmdline.txt
+uart_epaper_wakeup_gpio: 26
+uart_epaper_reset_gpio: 27
+validate_uart_epaper_require_uart_enabled: true
+validate_uart_epaper_require_serial_console_disabled: true
+validate_uart_epaper_require_gpio_reservation: true
+validate_uart_epaper_check_pyserial: true
+validate_uart_epaper_pyserial_package: python3-serial

@@ -542,3 +542,152 @@
     - ups_hat_e_enable_usb_max_current | bool
     - (validate_ups_hat_e_boot_config_path | default('') | length) > 0
     - (not ups_hat_e_require_detection | bool) or (validate_ups_hat_e_detected | bool)
+
+- name: Probe Raspberry Pi boot config candidates for UART e-paper validation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ uart_epaper_boot_config_candidates }}"
+  register: validate_uart_epaper_boot_config_probe
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_uart_enabled | bool or validate_uart_epaper_require_gpio_reservation | bool
+
+- name: Select boot config path for UART e-paper validation
+  ansible.builtin.set_fact:
+    validate_uart_epaper_boot_config_path: >-
+      {{
+        (
+          validate_uart_epaper_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_uart_enabled | bool or validate_uart_epaper_require_gpio_reservation | bool
+
+- name: Probe cmdline candidates for UART e-paper validation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ uart_epaper_cmdline_candidates }}"
+  register: validate_uart_epaper_cmdline_probe
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_serial_console_disabled | bool
+
+- name: Select cmdline path for UART e-paper validation
+  ansible.builtin.set_fact:
+    validate_uart_epaper_cmdline_path: >-
+      {{
+        (
+          validate_uart_epaper_cmdline_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_serial_console_disabled | bool
+
+- name: Read boot config for UART e-paper validation
+  ansible.builtin.slurp:
+    path: "{{ validate_uart_epaper_boot_config_path }}"
+  register: validate_uart_epaper_boot_config_content
+  when:
+    - uart_epaper_enabled | bool
+    - (validate_uart_epaper_boot_config_path | default('') | length) > 0
+    - validate_uart_epaper_require_uart_enabled | bool or validate_uart_epaper_require_gpio_reservation | bool
+
+- name: Read cmdline for UART e-paper validation
+  ansible.builtin.slurp:
+    path: "{{ validate_uart_epaper_cmdline_path }}"
+  register: validate_uart_epaper_cmdline_content
+  when:
+    - uart_epaper_enabled | bool
+    - (validate_uart_epaper_cmdline_path | default('') | length) > 0
+    - validate_uart_epaper_require_serial_console_disabled | bool
+
+- name: Assert UART hardware is enabled for UART e-paper
+  ansible.builtin.assert:
+    that:
+      - (validate_uart_epaper_boot_config_content.content | b64decode) is search('^(enable_uart=1|dtparam=uart0=on)$', multiline=True)
+    fail_msg: uart_epaper_enabled=true but UART hardware enable line is missing in boot config.
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_uart_enabled | bool
+    - (validate_uart_epaper_boot_config_path | default('') | length) > 0
+
+- name: Assert serial console is disabled for UART e-paper
+  ansible.builtin.assert:
+    that:
+      - (validate_uart_epaper_cmdline_content.content | b64decode) is not search('(^| )console=(serial0|ttyAMA0|ttyS0),[0-9]+($| )')
+    fail_msg: uart_epaper_enabled=true but serial console is still configured in cmdline.
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_serial_console_disabled | bool
+    - (validate_uart_epaper_cmdline_path | default('') | length) > 0
+
+- name: Assert GPIO reservations are present for UART e-paper
+  ansible.builtin.assert:
+    that:
+      - (validate_uart_epaper_boot_config_content.content | b64decode) is search('^gpio={{ uart_epaper_wakeup_gpio }}=op,', multiline=True)
+      - (validate_uart_epaper_boot_config_content.content | b64decode) is search('^gpio={{ uart_epaper_reset_gpio }}=op,', multiline=True)
+    fail_msg: uart_epaper_enabled=true but one or more WAKE/RST GPIO reservation lines are missing.
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_require_gpio_reservation | bool
+    - (validate_uart_epaper_boot_config_path | default('') | length) > 0
+
+- name: Validate pyserial package is installed for UART e-paper
+  ansible.builtin.command: >-
+    dpkg-query -W -f='${Package} ${Status}\n' {{ validate_uart_epaper_pyserial_package }}
+  register: validate_uart_epaper_pyserial_installed
+  changed_when: false
+  failed_when: >-
+    (validate_uart_epaper_pyserial_installed.rc != 0)
+    or ('{{ validate_uart_epaper_pyserial_package }} install ok installed' not in (validate_uart_epaper_pyserial_installed.stdout | default('')))
+  when:
+    - uart_epaper_enabled | bool
+    - validate_uart_epaper_check_pyserial | bool
+
+- name: Gather service facts for UART e-paper validation
+  ansible.builtin.service_facts:
+  when: uart_epaper_enabled | bool
+  become: true
+
+- name: Assert UART e-paper service is running
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services.get(uart_epaper_service_name ~ '.service', {}).get('state', 'stopped') == 'running'
+    fail_msg: "{{ uart_epaper_service_name }}.service is not running."
+  when: uart_epaper_enabled | bool
+  become: true
+
+- name: Probe UART serial device nodes for e-paper validation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: >-
+    {{
+      ['/dev/ttyAMA0', '/dev/serial0', '/dev/ttyS0']
+      if (uart_epaper_serial_device | lower) == 'auto'
+      else [uart_epaper_serial_device]
+    }}
+  register: validate_uart_epaper_serial_nodes
+  when:
+    - uart_epaper_enabled | bool
+    - uart_epaper_require_serial_device | bool
+
+- name: Assert UART serial device exists for e-paper
+  ansible.builtin.assert:
+    that:
+      - (validate_uart_epaper_serial_nodes.results | selectattr('stat.exists', 'equalto', true) | list | length) > 0
+    fail_msg: "uart_epaper_enabled=true but no UART serial device was detected for {{ uart_epaper_serial_device }}."
+  when:
+    - uart_epaper_enabled | bool
+    - uart_epaper_require_serial_device | bool
