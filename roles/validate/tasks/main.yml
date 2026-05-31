@@ -334,3 +334,63 @@
     - ai_camera_enabled | bool
     - validate_ai_camera_check_firmware_files | bool
     - (not ai_camera_require_detection | bool) or (validate_ai_camera_detected | bool)
+
+- name: Read HAT product for Sense HAT validation
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -f /proc/device-tree/hat/product ]; then
+      tr -d '\0' < /proc/device-tree/hat/product
+    fi
+  args:
+    executable: /bin/bash
+  register: validate_sense_hat_product
+  changed_when: false
+  failed_when: false
+
+- name: Read HAT vendor for Sense HAT validation
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -f /proc/device-tree/hat/vendor ]; then
+      tr -d '\0' < /proc/device-tree/hat/vendor
+    fi
+  args:
+    executable: /bin/bash
+  register: validate_sense_hat_vendor
+  changed_when: false
+  failed_when: false
+
+- name: Detect Sense HAT joystick input device during validation
+  ansible.builtin.command: grep -i Sense\ HAT\ Joystick /proc/bus/input/devices
+  register: validate_sense_hat_joystick
+  changed_when: false
+  failed_when: false
+
+- name: Compute Sense HAT detection state during validation
+  ansible.builtin.set_fact:
+    validate_sense_hat_detected: >-
+      {{
+        (
+          (((validate_sense_hat_vendor.stdout | default('') | trim) ~ ' ' ~ (validate_sense_hat_product.stdout | default('') | trim))
+            | regex_search(sense_hat_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+        or
+        (
+          (validate_sense_hat_joystick.stdout | default('')
+            | regex_search('Sense HAT Joystick', ignorecase=True)) is not none
+        )
+      }}
+
+- name: Report Sense HAT detection during validation
+  ansible.builtin.debug:
+    msg: "Sense HAT detected: {{ validate_sense_hat_detected | bool }}"
+
+- name: Validate Sense HAT Python import
+  ansible.builtin.command: python3 -c "import sense_hat"
+  register: validate_sense_hat_python
+  changed_when: false
+  failed_when: validate_sense_hat_python.rc != 0
+  when:
+    - sense_hat_enabled | bool
+    - validate_sense_hat_check_python_import | bool
+    - (not sense_hat_require_detection | bool) or (validate_sense_hat_detected | bool)

@@ -43,3 +43,11 @@ validate_ai_camera_check_firmware_files: true
 validate_ai_camera_firmware_files:
   - /lib/firmware/imx500_loader.fpk
   - /lib/firmware/imx500_firmware.fpk
+
+# Optional Raspberry Pi Sense HAT validation controls.
+sense_hat_enabled: false
+sense_hat_require_detection: true
+sense_hat_detect_match_patterns:
+  - Sense HAT
+  - Raspberry Pi Sense HAT
+validate_sense_hat_check_python_import: true

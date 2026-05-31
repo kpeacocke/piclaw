@@ -459,6 +459,125 @@
     - touch_display2_fail_if_not_detected | bool
     - not base_touch_display2_detected | bool
 
+- name: Detect Sense HAT joystick input device
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -r /proc/bus/input/devices ]; then
+      grep -i 'Sense HAT Joystick' /proc/bus/input/devices || true
+    fi
+  args:
+    executable: /bin/bash
+  register: base_sense_hat_joystick
+  changed_when: false
+  failed_when: false
+
+- name: Compute Sense HAT detection state
+  ansible.builtin.set_fact:
+    base_sense_hat_detected: >-
+      {{
+        (
+          (((base_hat_vendor | default('') | trim) ~ ' ' ~ (base_hat_product | default('') | trim))
+            | regex_search(sense_hat_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+        or
+        (
+          (base_sense_hat_joystick.stdout | default('')
+            | regex_search('Sense HAT Joystick', ignorecase=True)) is not none
+        )
+      }}
+
+- name: Compute Sense HAT application flag
+  ansible.builtin.set_fact:
+    base_sense_hat_should_configure: >-
+      {{
+        (sense_hat_enabled | bool)
+        and
+        ((not sense_hat_require_detection | bool) or base_sense_hat_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for Sense HAT I2C
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ sense_hat_boot_config_candidates }}"
+  register: base_sense_hat_boot_config_probe
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+
+- name: Select detected Raspberry Pi boot config path for Sense HAT I2C
+  ansible.builtin.set_fact:
+    base_sense_hat_boot_config_path: >-
+      {{
+        (
+          base_sense_hat_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+
+- name: Warn when no boot config path is detected for Sense HAT I2C
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ sense_hat_boot_config_candidates }};
+      skipping Sense HAT I2C config safely.
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+    - (base_sense_hat_boot_config_path | default('') | length) == 0
+
+- name: Fail when Sense HAT I2C boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ sense_hat_boot_config_candidates }}.
+      Cannot apply Sense HAT I2C config safely on this OS/image.
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+    - sense_hat_fail_if_boot_config_missing | bool
+    - (base_sense_hat_boot_config_path | default('') | length) == 0
+
+- name: Ensure I2C is enabled for Sense HAT
+  ansible.builtin.lineinfile:
+    path: "{{ base_sense_hat_boot_config_path }}"
+    regexp: '^dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+    state: present
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+    - (base_sense_hat_boot_config_path | default('') | length) > 0
+  register: base_sense_hat_i2c_config
+  become: true
+
+- name: Report Sense HAT configuration skip when board is not detected
+  ansible.builtin.debug:
+    msg: >-
+      sense_hat_enabled=true but Sense HAT was not detected;
+      skipping Sense HAT setup. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}'.
+  when:
+    - sense_hat_enabled | bool
+    - sense_hat_require_detection | bool
+    - not base_sense_hat_detected | bool
+
+- name: Fail when Sense HAT detection is required but board is not detected
+  ansible.builtin.fail:
+    msg: >-
+      sense_hat_enabled=true but Sense HAT was not detected.
+      Check GPIO/HAT seating, then retry.
+  when:
+    - sense_hat_enabled | bool
+    - sense_hat_require_detection | bool
+    - sense_hat_fail_if_not_detected | bool
+    - not base_sense_hat_detected | bool
+
 - name: Detect Raspberry Pi cameras via camera stack tools
   ansible.builtin.shell: |
     set -o pipefail
@@ -854,6 +973,14 @@
   register: base_ai_camera_extras_install
   become: true
 
+- name: Install Raspberry Pi Sense HAT package and dependencies
+  ansible.builtin.apt:
+    name: "{{ sense_hat_install_packages }}"
+    state: present
+  when: base_sense_hat_should_configure | bool
+  register: base_sense_hat_install
+  become: true
+
 - name: Check installed Node.js version
   ansible.builtin.command: node --version
   register: base_node_version
@@ -913,6 +1040,8 @@
     post_reboot_delay: 10
   when:
     - reboot_required.stat.exists or eeprom_update.changed or
+      (base_sense_hat_i2c_config is defined and base_sense_hat_i2c_config.changed) or
+      (base_sense_hat_install is defined and base_sense_hat_install.changed) or
       (base_touch_display2_auto_detect_config is defined and base_touch_display2_auto_detect_config.changed) or
       (base_touch_display2_disable_touch_config is defined and base_touch_display2_disable_touch_config.changed) or
       (base_touch_display2_overlay_config is defined and base_touch_display2_overlay_config.changed) or

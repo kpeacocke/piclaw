@@ -116,3 +116,19 @@ touch_display2_disable_touchscreen: false
 touch_display2_configure_touch_overlay: false
 touch_display2_model: 7inch
 touch_display2_touch_overlay_options: []
+
+# Optional Raspberry Pi Sense HAT setup.
+# Official docs: install `sense-hat`; package enables required dependencies and I2C.
+sense_hat_enabled: false
+sense_hat_require_detection: true
+sense_hat_fail_if_not_detected: false
+sense_hat_fail_if_boot_config_missing: false
+sense_hat_detect_match_patterns:
+  - Sense HAT
+  - Raspberry Pi Sense HAT
+sense_hat_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+sense_hat_ensure_i2c_arm: true
+sense_hat_install_packages:
+  - sense-hat

@@ -66,6 +66,12 @@ touch_display2_configure_touch_overlay: false
 touch_display2_model: 7inch
 touch_display2_touch_overlay_options: []
 
+# Raspberry Pi Sense HAT: install and enable only if detected.
+sense_hat_enabled: true
+sense_hat_require_detection: true
+sense_hat_fail_if_not_detected: false
+sense_hat_ensure_i2c_arm: true
+
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet
