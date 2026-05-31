@@ -51,3 +51,31 @@ sense_hat_detect_match_patterns:
   - Sense HAT
   - Raspberry Pi Sense HAT
 validate_sense_hat_check_python_import: true
+
+# Optional Raspberry Pi Touch Display 2 validation controls.
+touch_display2_enabled: false
+touch_display2_require_detection: true
+touch_display2_fail_if_not_detected: false
+touch_display2_detect_match_patterns:
+  - 720x1280
+  - ili9881
+  - touch display 2
+
+# Optional Waveshare UPS HAT (E) validation controls.
+ups_hat_e_enabled: false
+ups_hat_e_require_detection: true
+ups_hat_e_fail_if_not_detected: false
+ups_hat_e_enable_usb_max_current: false
+ups_hat_e_detect_match_patterns:
+  - UPS HAT (E)
+  - UPS HAT E
+  - Waveshare
+ups_hat_e_i2c_detect_addresses:
+  - "1-002d"
+ups_hat_e_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+validate_ups_hat_e_check_packages: true
+validate_ups_hat_e_packages:
+  - i2c-tools
+  - python3-smbus

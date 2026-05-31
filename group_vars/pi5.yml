@@ -72,6 +72,13 @@ sense_hat_require_detection: true
 sense_hat_fail_if_not_detected: false
 sense_hat_ensure_i2c_arm: true
 
+# Waveshare UPS HAT (E): configure/install only if detected.
+ups_hat_e_enabled: true
+ups_hat_e_require_detection: true
+ups_hat_e_fail_if_not_detected: false
+ups_hat_e_ensure_i2c_arm: true
+ups_hat_e_enable_usb_max_current: true
+
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet

@@ -578,6 +578,130 @@
     - sense_hat_fail_if_not_detected | bool
     - not base_sense_hat_detected | bool
 
+- name: Detect UPS HAT(E) I2C device nodes
+  ansible.builtin.shell: |
+    set -o pipefail
+    for addr in {{ ups_hat_e_i2c_detect_addresses | map('quote') | join(' ') }}; do
+      if [ -e "/sys/bus/i2c/devices/${addr}" ]; then
+        echo "${addr}"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: base_ups_hat_e_i2c_nodes
+  changed_when: false
+  failed_when: false
+
+- name: Compute UPS HAT(E) detection state
+  ansible.builtin.set_fact:
+    base_ups_hat_e_detected: >-
+      {{
+        (
+          (((base_hat_vendor | default('') | trim) ~ ' ' ~ (base_hat_product | default('') | trim))
+            | regex_search(ups_hat_e_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+        or ((base_ups_hat_e_i2c_nodes.stdout_lines | default([]) | length) > 0)
+      }}
+
+- name: Compute UPS HAT(E) application flag
+  ansible.builtin.set_fact:
+    base_ups_hat_e_should_configure: >-
+      {{
+        (ups_hat_e_enabled | bool)
+        and
+        ((not ups_hat_e_require_detection | bool) or base_ups_hat_e_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for UPS HAT(E)
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ ups_hat_e_boot_config_candidates }}"
+  register: base_ups_hat_e_boot_config_probe
+  when: base_ups_hat_e_should_configure | bool
+
+- name: Select detected Raspberry Pi boot config path for UPS HAT(E)
+  ansible.builtin.set_fact:
+    base_ups_hat_e_boot_config_path: >-
+      {{
+        (
+          base_ups_hat_e_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when: base_ups_hat_e_should_configure | bool
+
+- name: Warn when no boot config path is detected for UPS HAT(E)
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ ups_hat_e_boot_config_candidates }};
+      skipping UPS HAT(E) config safely.
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) == 0
+
+- name: Fail when UPS HAT(E) boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ ups_hat_e_boot_config_candidates }}.
+      Cannot apply UPS HAT(E) config safely on this OS/image.
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - ups_hat_e_fail_if_boot_config_missing | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) == 0
+
+- name: Ensure I2C is enabled for UPS HAT(E)
+  ansible.builtin.lineinfile:
+    path: "{{ base_ups_hat_e_boot_config_path }}"
+    regexp: '^dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+    state: present
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - ups_hat_e_ensure_i2c_arm | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) > 0
+  register: base_ups_hat_e_i2c_arm_config
+  become: true
+
+- name: Optionally enable USB max current flag for Pi power warning mitigation
+  ansible.builtin.lineinfile:
+    path: "{{ base_ups_hat_e_boot_config_path }}"
+    regexp: '^usb_max_current_enable='
+    line: usb_max_current_enable=1
+    state: present
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - ups_hat_e_enable_usb_max_current | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) > 0
+  register: base_ups_hat_e_usb_current_config
+  become: true
+
+- name: Report UPS HAT(E) configuration skip when board is not detected
+  ansible.builtin.debug:
+    msg: >-
+      ups_hat_e_enabled=true but UPS HAT(E) was not detected;
+      skipping setup. Detected vendor='{{ base_hat_vendor }}', product='{{ base_hat_product }}',
+      i2c_nodes={{ base_ups_hat_e_i2c_nodes.stdout_lines | default([]) }}.
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_require_detection | bool
+    - not base_ups_hat_e_detected | bool
+
+- name: Fail when UPS HAT(E) detection is required but board is not detected
+  ansible.builtin.fail:
+    msg: >-
+      ups_hat_e_enabled=true but UPS HAT(E) was not detected.
+      Check pogo-pin seating, battery assembly, and I2C availability.
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_require_detection | bool
+    - ups_hat_e_fail_if_not_detected | bool
+    - not base_ups_hat_e_detected | bool
+
 - name: Detect Raspberry Pi cameras via camera stack tools
   ansible.builtin.shell: |
     set -o pipefail
@@ -981,6 +1105,14 @@
   register: base_sense_hat_install
   become: true
 
+- name: Install UPS HAT(E) userspace dependencies
+  ansible.builtin.apt:
+    name: "{{ ups_hat_e_install_packages }}"
+    state: present
+  when: base_ups_hat_e_should_configure | bool
+  register: base_ups_hat_e_install
+  become: true
+
 - name: Check installed Node.js version
   ansible.builtin.command: node --version
   register: base_node_version
@@ -1040,6 +1172,9 @@
     post_reboot_delay: 10
   when:
     - reboot_required.stat.exists or eeprom_update.changed or
+      (base_ups_hat_e_i2c_arm_config is defined and base_ups_hat_e_i2c_arm_config.changed) or
+      (base_ups_hat_e_usb_current_config is defined and base_ups_hat_e_usb_current_config.changed) or
+      (base_ups_hat_e_install is defined and base_ups_hat_e_install.changed) or
       (base_sense_hat_i2c_config is defined and base_sense_hat_i2c_config.changed) or
       (base_sense_hat_install is defined and base_sense_hat_install.changed) or
       (base_touch_display2_auto_detect_config is defined and base_touch_display2_auto_detect_config.changed) or

@@ -132,3 +132,24 @@ sense_hat_boot_config_candidates:
 sense_hat_ensure_i2c_arm: true
 sense_hat_install_packages:
   - sense-hat
+
+# Optional Waveshare UPS HAT (E) support.
+# Vendor docs indicate I2C is required and demo tooling uses python3-smbus.
+ups_hat_e_enabled: false
+ups_hat_e_require_detection: true
+ups_hat_e_fail_if_not_detected: false
+ups_hat_e_fail_if_boot_config_missing: false
+ups_hat_e_detect_match_patterns:
+  - UPS HAT (E)
+  - UPS HAT E
+  - Waveshare
+ups_hat_e_i2c_detect_addresses:
+  - "1-002d"
+ups_hat_e_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+ups_hat_e_ensure_i2c_arm: true
+ups_hat_e_enable_usb_max_current: false
+ups_hat_e_install_packages:
+  - i2c-tools
+  - python3-smbus

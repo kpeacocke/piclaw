@@ -394,3 +394,151 @@
     - sense_hat_enabled | bool
     - validate_sense_hat_check_python_import | bool
     - (not sense_hat_require_detection | bool) or (validate_sense_hat_detected | bool)
+
+- name: Detect DSI display connectors and modes during validation
+  ansible.builtin.shell: |
+    set -o pipefail
+    for node in /sys/class/drm/card*-DSI-*; do
+      [ -d "$node" ] || continue
+      status="$(cat "$node/status" 2>/dev/null || true)"
+      modes="$(tr '\n' ' ' < "$node/modes" 2>/dev/null || true)"
+      printf '%s status=%s modes=%s\n' "$node" "$status" "$modes"
+    done
+  args:
+    executable: /bin/bash
+  register: validate_touch_display2_drm
+  changed_when: false
+  failed_when: false
+
+- name: Compute Touch Display 2 detection state during validation
+  ansible.builtin.set_fact:
+    validate_touch_display2_detected: >-
+      {{
+        (
+          (validate_touch_display2_drm.stdout | default('')
+            | regex_search('status=connected', ignorecase=True)) is not none
+        )
+        and
+        (
+          (validate_touch_display2_drm.stdout | default('')
+            | regex_search(touch_display2_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+      }}
+
+- name: Report Touch Display 2 detection during validation
+  ansible.builtin.debug:
+    msg: "Touch Display 2 detected: {{ validate_touch_display2_detected | bool }}"
+
+- name: Assert Touch Display 2 detection when required
+  ansible.builtin.assert:
+    that:
+      - validate_touch_display2_detected | bool
+    fail_msg: Touch Display 2 is required but was not detected.
+  when:
+    - touch_display2_enabled | bool
+    - touch_display2_require_detection | bool
+    - touch_display2_fail_if_not_detected | bool
+
+- name: Detect UPS HAT(E) I2C device nodes during validation
+  ansible.builtin.shell: |
+    set -o pipefail
+    for addr in {{ ups_hat_e_i2c_detect_addresses | map('quote') | join(' ') }}; do
+      if [ -e "/sys/bus/i2c/devices/${addr}" ]; then
+        echo "${addr}"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: validate_ups_hat_e_i2c_nodes
+  changed_when: false
+  failed_when: false
+
+- name: Compute UPS HAT(E) detection state during validation
+  ansible.builtin.set_fact:
+    validate_ups_hat_e_detected: >-
+      {{
+        (
+          (((validate_sense_hat_vendor.stdout | default('') | trim) ~ ' ' ~ (validate_sense_hat_product.stdout | default('') | trim))
+            | regex_search(ups_hat_e_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+        or ((validate_ups_hat_e_i2c_nodes.stdout_lines | default([]) | length) > 0)
+      }}
+
+- name: Report UPS HAT(E) detection during validation
+  ansible.builtin.debug:
+    msg: "UPS HAT(E) detected: {{ validate_ups_hat_e_detected | bool }}"
+
+- name: Assert UPS HAT(E) detection when required
+  ansible.builtin.assert:
+    that:
+      - validate_ups_hat_e_detected | bool
+    fail_msg: UPS HAT(E) is required but was not detected.
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_require_detection | bool
+    - ups_hat_e_fail_if_not_detected | bool
+
+- name: Validate UPS HAT(E) package dependencies are installed
+  ansible.builtin.command: >-
+    dpkg-query -W -f='${Package} ${Status}\n' {{ validate_ups_hat_e_packages | join(' ') }}
+  register: validate_ups_hat_e_packages_installed
+  changed_when: false
+  failed_when: >-
+    (validate_ups_hat_e_packages_installed.rc != 0)
+    or ('i2c-tools install ok installed' not in (validate_ups_hat_e_packages_installed.stdout | default('')))
+    or ('python3-smbus install ok installed' not in (validate_ups_hat_e_packages_installed.stdout | default('')))
+  when:
+    - ups_hat_e_enabled | bool
+    - validate_ups_hat_e_check_packages | bool
+    - (not ups_hat_e_require_detection | bool) or (validate_ups_hat_e_detected | bool)
+
+- name: Probe Raspberry Pi boot config candidates for UPS workaround validation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ ups_hat_e_boot_config_candidates }}"
+  register: validate_ups_hat_e_boot_config_probe
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_enable_usb_max_current | bool
+    - (not ups_hat_e_require_detection | bool) or (validate_ups_hat_e_detected | bool)
+
+- name: Select boot config path for UPS workaround validation
+  ansible.builtin.set_fact:
+    validate_ups_hat_e_boot_config_path: >-
+      {{
+        (
+          validate_ups_hat_e_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_enable_usb_max_current | bool
+    - (not ups_hat_e_require_detection | bool) or (validate_ups_hat_e_detected | bool)
+
+- name: Read boot config for UPS workaround validation
+  ansible.builtin.slurp:
+    path: "{{ validate_ups_hat_e_boot_config_path }}"
+  register: validate_ups_hat_e_boot_config_content
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_enable_usb_max_current | bool
+    - (validate_ups_hat_e_boot_config_path | default('') | length) > 0
+    - (not ups_hat_e_require_detection | bool) or (validate_ups_hat_e_detected | bool)
+
+- name: Assert vendor UPS workaround is configured
+  ansible.builtin.assert:
+    that:
+      - (validate_ups_hat_e_boot_config_content.content | b64decode) is search('^usb_max_current_enable=1$', multiline=True)
+    fail_msg: ups_hat_e_enable_usb_max_current=true but usb_max_current_enable=1 is missing from boot config.
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_enable_usb_max_current | bool
+    - (validate_ups_hat_e_boot_config_path | default('') | length) > 0
+    - (not ups_hat_e_require_detection | bool) or (validate_ups_hat_e_detected | bool)
