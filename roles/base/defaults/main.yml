@@ -3,6 +3,25 @@
 run_full_upgrade: true
 # Enable PCIe Gen 3.0 — required for AI Kit (M.2 slot); not needed for AI HAT+ 2.
 pcie_gen3_enabled: false
+pcie_gen3_require_hat_detection: false
+pcie_gen3_fail_if_boot_config_missing: false
+pcie_gen3_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+pcie_gen3_hat_match_patterns:
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+
+# Safe PCIe interface enable flag for boards that are Gen2-only but may need explicit
+# PCIe enablement on some images/firmware combinations.
+pcie_force_enable: false
+pcie_force_enable_require_hat_detection: false
+pcie_force_enable_fail_if_boot_config_missing: false
+pcie_force_enable_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
 
 # OpenClaw currently requires Node.js >= 22.12.0.
 # Keep Node.js on the latest release for the selected major channel.
