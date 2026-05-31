@@ -17,6 +17,14 @@ tailscale_advertise_exit_node: false
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
 
+# DAC Pro HAT audio (guarded by runtime HAT detection in the base role)
+audio_dac_enabled: true
+audio_dac_require_hat_detection: true
+audio_dac_overlay: hifiberry-dacplus-pro
+audio_dac_configure_alsa_default: true
+audio_dac_verify_playback_device: true
+audio_dac_fail_if_alsa_card_missing: false
+
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet

@@ -18,6 +18,128 @@
   when: pcie_gen3_config is defined and pcie_gen3_config.changed
   become: true
 
+- name: Read HAT product from firmware device tree
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -f /proc/device-tree/hat/product ]; then
+      tr -d '\0' < /proc/device-tree/hat/product
+    fi
+  args:
+    executable: /bin/bash
+  register: base_hat_product_raw
+  changed_when: false
+  failed_when: false
+
+- name: Read HAT vendor from firmware device tree
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -f /proc/device-tree/hat/vendor ]; then
+      tr -d '\0' < /proc/device-tree/hat/vendor
+    fi
+  args:
+    executable: /bin/bash
+  register: base_hat_vendor_raw
+  changed_when: false
+  failed_when: false
+
+- name: Compute DAC detection state
+  ansible.builtin.set_fact:
+    base_hat_product: "{{ base_hat_product_raw.stdout | default('') | trim }}"
+    base_hat_vendor: "{{ base_hat_vendor_raw.stdout | default('') | trim }}"
+    base_audio_dac_detect_regex: >-
+      {{ audio_dac_hat_match_patterns | map('regex_escape') | join('|') }}
+    base_audio_dac_detected: >-
+      {{
+        (((base_hat_vendor_raw.stdout | default('') | trim) ~ ' ' ~ (base_hat_product_raw.stdout | default('') | trim))
+          | regex_search(audio_dac_hat_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none
+      }}
+
+- name: Compute DAC application flag
+  ansible.builtin.set_fact:
+    base_audio_dac_should_configure: >-
+      {{
+        (audio_dac_enabled | bool)
+        and
+        ((not audio_dac_require_hat_detection | bool) or base_audio_dac_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ audio_dac_boot_config_candidates }}"
+  register: base_audio_dac_boot_config_probe
+  when: base_audio_dac_should_configure | bool
+
+- name: Select detected Raspberry Pi boot config path
+  ansible.builtin.set_fact:
+    base_audio_dac_boot_config_path: >-
+      {{
+        (
+          base_audio_dac_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when: base_audio_dac_should_configure | bool
+
+- name: Warn when no Raspberry Pi boot config path is detected
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ audio_dac_boot_config_candidates }};
+      skipping DAC config safely.
+  when:
+    - base_audio_dac_should_configure | bool
+    - (base_audio_dac_boot_config_path | default('') | length) == 0
+
+- name: Fail when boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ audio_dac_boot_config_candidates }}.
+      Cannot apply DAC overlay safely on this OS/image.
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_fail_if_boot_config_missing | bool
+    - (base_audio_dac_boot_config_path | default('') | length) == 0
+
+- name: Ensure onboard audio is disabled for external DAC
+  ansible.builtin.lineinfile:
+    path: "{{ base_audio_dac_boot_config_path }}"
+    regexp: '^dtparam=audio='
+    line: dtparam=audio=off
+    state: present
+  when:
+    - base_audio_dac_should_configure | bool
+    - (base_audio_dac_boot_config_path | default('') | length) > 0
+  register: base_dac_audio_dtparam_config
+  become: true
+
+- name: Ensure DAC overlay is configured
+  ansible.builtin.lineinfile:
+    path: "{{ base_audio_dac_boot_config_path }}"
+    regexp: '^dtoverlay={{ audio_dac_overlay | regex_escape }}$'
+    line: "dtoverlay={{ audio_dac_overlay }}"
+    state: present
+  when:
+    - base_audio_dac_should_configure | bool
+    - (base_audio_dac_boot_config_path | default('') | length) > 0
+  register: base_dac_overlay_config
+  become: true
+
+- name: Report DAC configuration skip when HAT is not detected
+  ansible.builtin.debug:
+    msg: >-
+      audio_dac_enabled=true but no matching DAC HAT was detected;
+      skipping DAC config. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}'.
+  when:
+    - audio_dac_enabled | bool
+    - audio_dac_require_hat_detection | bool
+    - not base_audio_dac_detected | bool
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
@@ -41,6 +163,14 @@
       - python3-pip
       - pciutils
     state: present
+  become: true
+
+- name: Install ALSA utilities for DAC verification and defaults
+  ansible.builtin.apt:
+    name:
+      - alsa-utils
+    state: present
+  when: base_audio_dac_should_configure | bool
   become: true
 
 - name: Check installed Node.js version
@@ -100,8 +230,87 @@
     msg: Reboot initiated by Ansible after baseline upgrade.
     reboot_timeout: 900
     post_reboot_delay: 10
-  when: reboot_required.stat.exists or eeprom_update.changed
+  when:
+    - reboot_required.stat.exists or eeprom_update.changed or
+      (base_dac_audio_dtparam_config is defined and base_dac_audio_dtparam_config.changed) or
+      (base_dac_overlay_config is defined and base_dac_overlay_config.changed)
   become: true
+
+- name: Detect ALSA playback cards
+  ansible.builtin.command: aplay -l
+  register: base_aplay_cards
+  changed_when: false
+  failed_when: false
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+
+- name: Compute DAC ALSA card selection
+  ansible.builtin.set_fact:
+    base_audio_dac_alsa_match_regex: "{{ audio_dac_alsa_card_match_patterns | map('regex_escape') | join('|') }}"
+    base_audio_dac_alsa_card: >-
+      {{
+        (
+          base_aplay_cards.stdout
+          | default('')
+          | regex_findall('\\[(.*?)\\]')
+          | select('search', audio_dac_alsa_card_match_patterns | map('regex_escape') | join('|'), ignorecase=True)
+          | list
+          | first
+        )
+        | default('')
+      }}
+    base_audio_dac_alsa_card_detected: "{{ (base_audio_dac_alsa_card | length) > 0 }}"
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+
+- name: Configure default ALSA device for DAC
+  ansible.builtin.copy:
+    dest: /etc/asound.conf
+    mode: "0644"
+    content: |
+      pcm.!default {
+        type hw
+        card {{ base_audio_dac_alsa_card }}
+      }
+      ctl.!default {
+        type hw
+        card {{ base_audio_dac_alsa_card }}
+      }
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool
+    - base_audio_dac_alsa_card_detected | bool
+  become: true
+
+- name: Warn when DAC ALSA card is not detected
+  ansible.builtin.debug:
+    msg: >-
+      DAC appears enabled in config, but no matching ALSA playback card was found.
+      aplay rc={{ base_aplay_cards.rc | default(-1) }} output='{{ base_aplay_cards.stdout | default('') | trim }}'.
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+    - not base_audio_dac_alsa_card_detected | bool
+
+- name: Fail when DAC ALSA card is required but not detected
+  ansible.builtin.fail:
+    msg: >-
+      No matching DAC ALSA card detected after configuration. Confirm overlay and hardware seating.
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_fail_if_alsa_card_missing | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+    - not base_audio_dac_alsa_card_detected | bool
+
+- name: Report detected DAC ALSA card
+  ansible.builtin.debug:
+    msg: "Configured default ALSA card: {{ base_audio_dac_alsa_card }}"
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_verify_playback_device | bool
+    - base_audio_dac_alsa_card_detected | bool
 
 - name: Verify Hailo PCIe device is detected
   ansible.builtin.shell: |

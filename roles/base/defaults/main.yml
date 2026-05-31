@@ -8,3 +8,30 @@ pcie_gen3_enabled: false
 # Keep Node.js on the latest release for the selected major channel.
 bootstrap_nodejs_major: 24
 bootstrap_nodejs_min_version: 24.0.0
+
+# Optional DAC HAT audio configuration.
+# When enabled, the role disables onboard analog audio and adds a DAC overlay.
+audio_dac_enabled: false
+audio_dac_require_hat_detection: true
+audio_dac_overlay: hifiberry-dacplus-pro
+audio_dac_hat_match_patterns:
+  - DAC+ Pro
+  - DAC Pro
+  - DAC2 Pro
+  - IQaudIO DAC Pro
+  - HiFiBerry DAC+ Pro
+
+# Optional ALSA automation for Raspberry Pi OS once DAC is enabled.
+audio_dac_configure_alsa_default: true
+audio_dac_verify_playback_device: true
+audio_dac_fail_if_alsa_card_missing: false
+audio_dac_fail_if_boot_config_missing: false
+audio_dac_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+audio_dac_alsa_card_match_patterns:
+  - snd_rpi_hifiberry
+  - sndrpihifiberry
+  - iqaudio
+  - hifiberry
+  - dac
