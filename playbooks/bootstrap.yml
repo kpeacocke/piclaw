@@ -11,3 +11,7 @@
     - role: tailscale
     - role: base
     - role: hailo
+      when: >-
+        (not (hailo_run_if_detected | default(true) | bool))
+        or
+        (hailo_hw_detected | default(false) | bool)

@@ -1,6 +1,8 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 run_full_upgrade: true
+hailo_run_if_detected: true
+
 # Enable PCIe Gen 3.0 — required for AI Kit (M.2 slot); not needed for AI HAT+ 2.
 pcie_gen3_enabled: false
 pcie_gen3_require_hat_detection: false

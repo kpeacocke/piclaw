@@ -16,6 +16,7 @@ tailscale_advertise_exit_node: false
 # Common local overrides:
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
+openclaw_auto_fallback_to_external_when_no_hailo: true
 
 # Waveshare/Core 2-CH PCIe expansion board (safe, detection-gated tuning)
 pcie_force_enable: true

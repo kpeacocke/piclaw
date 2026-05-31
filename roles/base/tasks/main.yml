@@ -461,12 +461,19 @@
     - audio_dac_verify_playback_device | bool
     - base_audio_dac_alsa_card_detected | bool
 
-- name: Verify Hailo PCIe device is detected
-  ansible.builtin.shell: |
-    set -o pipefail
-    lspci | grep -i hailo
-  args:
-    executable: /bin/bash
+- name: Detect Hailo PCIe device presence
+  ansible.builtin.command: lspci -nn
   register: hailo_lspci
   changed_when: false
-  failed_when: hailo_lspci.rc != 0
+  failed_when: false
+
+- name: Compute Hailo hardware detection state
+  ansible.builtin.set_fact:
+    hailo_hw_detected: >-
+      {{
+        (hailo_lspci.stdout | default('') | regex_search('hailo', ignorecase=True)) is not none
+      }}
+
+- name: Report Hailo hardware detection state
+  ansible.builtin.debug:
+    msg: "Hailo hardware detected: {{ hailo_hw_detected | bool }}"
