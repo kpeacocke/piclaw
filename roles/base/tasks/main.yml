@@ -94,11 +94,15 @@
     base_pcie_expansion_hat_detected: >-
       {{
         (
-          base_pcie_hat_match_patterns_normalized
-          | select('in', base_pcie_hat_signature_normalized)
-          | list
-          | length
-        ) > 0
+          (
+            base_pcie_hat_match_patterns_normalized
+            | select('in', base_pcie_hat_signature_normalized)
+            | list
+            | length
+          ) > 0
+        )
+        or
+        (pcie_expansion_hat_declared_present | default(false) | bool)
       }}
 
 - name: Compute PCIe force-enable application flag
@@ -170,7 +174,8 @@
       skipping PCIe enablement. Detected vendor='{{ base_hat_vendor }}',
       product='{{ base_hat_product }}', normalized='{{ base_pcie_hat_signature_normalized }}',
       vcgencmd='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}',
-      match_patterns={{ base_pcie_hat_match_patterns_effective }}.
+      match_patterns={{ base_pcie_hat_match_patterns_effective }},
+      declared_present={{ pcie_expansion_hat_declared_present | default(false) | bool }}.
   when:
     - pcie_force_enable | bool
     - pcie_force_enable_require_hat_detection | bool
@@ -245,7 +250,8 @@
       skipping PCIe Gen3 tuning. Detected vendor='{{ base_hat_vendor }}',
       product='{{ base_hat_product }}', normalized='{{ base_pcie_hat_signature_normalized }}',
       vcgencmd='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}',
-      match_patterns={{ base_pcie_hat_match_patterns_effective }}.
+      match_patterns={{ base_pcie_hat_match_patterns_effective }},
+      declared_present={{ pcie_expansion_hat_declared_present | default(false) | bool }}.
   when:
     - pcie_gen3_enabled | bool
     - pcie_gen3_require_hat_detection | bool

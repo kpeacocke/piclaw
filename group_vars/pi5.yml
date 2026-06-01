@@ -21,6 +21,7 @@ openclaw_auto_fallback_to_external_when_no_hailo: true
 # Waveshare/Core 2-CH PCIe expansion board + Raspberry Pi AI HAT+ 2 (safe, detection-gated tuning)
 pcie_force_enable: true
 pcie_force_enable_require_hat_detection: true
+pcie_expansion_hat_declared_present: true
 pcie_force_enable_fail_if_boot_config_missing: false
 pcie_gen3_enabled: false
 pcie_gen3_require_hat_detection: true

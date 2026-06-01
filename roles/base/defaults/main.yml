@@ -37,6 +37,9 @@ pcie_gen3_hat_match_patterns:
 # PCIe enablement on some images/firmware combinations.
 pcie_force_enable: false
 pcie_force_enable_require_hat_detection: false
+# Operator declaration for hosts known to have an external PCIe expansion board
+# even when HAT EEPROM strings are unavailable or non-standard.
+pcie_expansion_hat_declared_present: false
 pcie_force_enable_fail_if_boot_config_missing: false
 pcie_force_enable_boot_config_candidates:
   - /boot/firmware/config.txt
