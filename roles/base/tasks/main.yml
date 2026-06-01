@@ -36,6 +36,14 @@
   changed_when: false
   failed_when: false
 
+- name: Report raw HAT EEPROM and vcgencmd values
+  ansible.builtin.debug:
+    msg: >
+      HAT EEPROM vendor='{{ base_hat_vendor_raw.stdout | default('') | trim }}'
+      product='{{ base_hat_product_raw.stdout | default('') | trim }}'
+      vcgencmd_stdout='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}'
+      vcgencmd_stderr='{{ base_hat_vcgencmd_raw.stderr | default('') | trim }}'
+
 - name: Compute base HAT facts
   ansible.builtin.set_fact:
     base_hat_product: "{{ base_hat_product_raw.stdout | default('') | trim }}"

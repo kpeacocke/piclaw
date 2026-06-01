@@ -12,17 +12,26 @@ pcie_gen3_boot_config_candidates:
   - /boot/config.txt
 
 # Shared expansion-board identity patterns used by detection-gated PCIe settings.
+# Each entry is matched as a substring of the normalised vendor+product+vcgencmd string.
 pcie_expansion_hat_match_patterns:
+  # Waveshare / 2-CH PCIe expansion board
   - Waveshare
   - PCIe TO 2-CH PCIe HAT
   - 2-CH PCIe Adapter Board
   - PCIe Expansion Board for Raspberry Pi 5
+  # Raspberry Pi AI HAT+ 2 (Hailo-10H)
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
 
 pcie_gen3_hat_match_patterns:
   - Waveshare
   - PCIe TO 2-CH PCIe HAT
   - 2-CH PCIe Adapter Board
   - PCIe Expansion Board for Raspberry Pi 5
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
 
 # Safe PCIe interface enable flag for boards that are Gen2-only but may need explicit
 # PCIe enablement on some images/firmware combinations.

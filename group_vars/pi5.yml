@@ -18,18 +18,29 @@ hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
 openclaw_auto_fallback_to_external_when_no_hailo: true
 
-# Waveshare/Core 2-CH PCIe expansion board (safe, detection-gated tuning)
+# Waveshare/Core 2-CH PCIe expansion board + Raspberry Pi AI HAT+ 2 (safe, detection-gated tuning)
 pcie_force_enable: true
 pcie_force_enable_require_hat_detection: true
 pcie_force_enable_fail_if_boot_config_missing: false
 pcie_gen3_enabled: false
 pcie_gen3_require_hat_detection: true
 pcie_gen3_fail_if_boot_config_missing: false
+pcie_expansion_hat_match_patterns:
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
 pcie_gen3_hat_match_patterns:
   - Waveshare
   - PCIe TO 2-CH PCIe HAT
   - 2-CH PCIe Adapter Board
   - PCIe Expansion Board for Raspberry Pi 5
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
 
 # DAC Pro HAT audio (guarded by runtime HAT detection in the base role)
 audio_dac_enabled: true
