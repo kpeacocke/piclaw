@@ -36,10 +36,13 @@
   changed_when: false
   failed_when: false
 
-- name: Compute HAT facts and PCIe expansion detection state
+- name: Compute base HAT facts
   ansible.builtin.set_fact:
     base_hat_product: "{{ base_hat_product_raw.stdout | default('') | trim }}"
     base_hat_vendor: "{{ base_hat_vendor_raw.stdout | default('') | trim }}"
+
+- name: Compute normalized PCIe HAT signature
+  ansible.builtin.set_fact:
     base_pcie_hat_signature_normalized: >-
       {{
         (
@@ -55,11 +58,17 @@
           | trim
         )
       }}
+
+- name: Compute effective PCIe HAT match patterns
+  ansible.builtin.set_fact:
     base_pcie_hat_match_patterns_effective: >-
       {{
         pcie_expansion_hat_match_patterns
         | default(pcie_gen3_hat_match_patterns, true)
       }}
+
+- name: Normalize PCIe HAT match patterns
+  ansible.builtin.set_fact:
     base_pcie_hat_match_patterns_normalized: >-
       {{
         (
@@ -71,6 +80,9 @@
           | list
         )
       }}
+
+- name: Compute PCIe expansion detection state
+  ansible.builtin.set_fact:
     base_pcie_expansion_hat_detected: >-
       {{
         (
