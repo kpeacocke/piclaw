@@ -10,6 +10,14 @@ pcie_gen3_fail_if_boot_config_missing: false
 pcie_gen3_boot_config_candidates:
   - /boot/firmware/config.txt
   - /boot/config.txt
+
+# Shared expansion-board identity patterns used by detection-gated PCIe settings.
+pcie_expansion_hat_match_patterns:
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+
 pcie_gen3_hat_match_patterns:
   - Waveshare
   - PCIe TO 2-CH PCIe HAT

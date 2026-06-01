@@ -24,15 +24,61 @@
   changed_when: false
   failed_when: false
 
+- name: Read HAT details from vcgencmd as fallback
+  ansible.builtin.shell: |
+    set -o pipefail
+    if command -v vcgencmd >/dev/null 2>&1; then
+      vcgencmd hat
+    fi
+  args:
+    executable: /bin/bash
+  register: base_hat_vcgencmd_raw
+  changed_when: false
+  failed_when: false
+
 - name: Compute HAT facts and PCIe expansion detection state
   ansible.builtin.set_fact:
     base_hat_product: "{{ base_hat_product_raw.stdout | default('') | trim }}"
     base_hat_vendor: "{{ base_hat_vendor_raw.stdout | default('') | trim }}"
+    base_pcie_hat_signature_normalized: >-
+      {{
+        (
+          ((base_hat_vendor_raw.stdout | default('') | trim)
+          ~ ' '
+          ~ (base_hat_product_raw.stdout | default('') | trim)
+          ~ ' '
+          ~ (base_hat_vcgencmd_raw.stdout | default('') | trim)
+          ~ ' '
+          ~ (base_hat_vcgencmd_raw.stderr | default('') | trim))
+          | lower
+          | regex_replace('[^a-z0-9]+', ' ')
+          | trim
+        )
+      }}
+    base_pcie_hat_match_patterns_effective: >-
+      {{
+        pcie_expansion_hat_match_patterns
+        | default(pcie_gen3_hat_match_patterns, true)
+      }}
+    base_pcie_hat_match_patterns_normalized: >-
+      {{
+        (
+          base_pcie_hat_match_patterns_effective
+          | map('lower')
+          | map('regex_replace', '[^a-z0-9]+', ' ')
+          | map('trim')
+          | reject('equalto', '')
+          | list
+        )
+      }}
     base_pcie_expansion_hat_detected: >-
       {{
-        (((base_hat_vendor_raw.stdout | default('') | trim) ~ ' ' ~ (base_hat_product_raw.stdout | default('') | trim))
-          | regex_search(pcie_gen3_hat_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
-        is not none
+        (
+          base_pcie_hat_match_patterns_normalized
+          | select('in', base_pcie_hat_signature_normalized)
+          | list
+          | length
+        ) > 0
       }}
 
 - name: Compute PCIe force-enable application flag
@@ -102,7 +148,9 @@
     msg: >-
       pcie_force_enable=true but no matching PCIe expansion HAT was detected;
       skipping PCIe enablement. Detected vendor='{{ base_hat_vendor }}',
-      product='{{ base_hat_product }}'.
+      product='{{ base_hat_product }}', normalized='{{ base_pcie_hat_signature_normalized }}',
+      vcgencmd='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}',
+      match_patterns={{ base_pcie_hat_match_patterns_effective }}.
   when:
     - pcie_force_enable | bool
     - pcie_force_enable_require_hat_detection | bool
@@ -175,7 +223,9 @@
     msg: >-
       pcie_gen3_enabled=true but no matching PCIe expansion HAT was detected;
       skipping PCIe Gen3 tuning. Detected vendor='{{ base_hat_vendor }}',
-      product='{{ base_hat_product }}'.
+      product='{{ base_hat_product }}', normalized='{{ base_pcie_hat_signature_normalized }}',
+      vcgencmd='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}',
+      match_patterns={{ base_pcie_hat_match_patterns_effective }}.
   when:
     - pcie_gen3_enabled | bool
     - pcie_gen3_require_hat_detection | bool
