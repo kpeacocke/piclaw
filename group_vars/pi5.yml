@@ -22,6 +22,7 @@ openclaw_auto_fallback_to_external_when_no_hailo: true
 pcie_force_enable: true
 pcie_force_enable_require_hat_detection: true
 pcie_expansion_hat_declared_present: true
+pcie_expansion_fail_if_not_enumerated: true
 pcie_force_enable_fail_if_boot_config_missing: false
 pcie_gen3_enabled: false
 pcie_gen3_require_hat_detection: true

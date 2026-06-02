@@ -243,6 +243,19 @@
   register: pcie_gen3_config
   become: true
 
+- name: Remove PCIe Gen3 override when PCIe Gen3 tuning is disabled
+  ansible.builtin.lineinfile:
+    path: "{{ base_pcie_force_enable_boot_config_path }}"
+    regexp: '^dtparam=pciex1_gen='
+    state: absent
+  when:
+    - pcie_force_enable | bool
+    - not pcie_gen3_enabled | bool
+    - base_pcie_force_enable_should_configure | bool
+    - (base_pcie_force_enable_boot_config_path | default('') | length) > 0
+  register: pcie_gen3_disable_config
+  become: true
+
 - name: Report PCIe Gen3 configuration skip when expansion HAT is not detected
   ansible.builtin.debug:
     msg: >-
@@ -264,8 +277,48 @@
     post_reboot_delay: 10
   when: >-
     (pcie_gen3_config is defined and pcie_gen3_config.changed) or
+    (pcie_gen3_disable_config is defined and pcie_gen3_disable_config.changed) or
     (pcie_force_enable_config is defined and pcie_force_enable_config.changed)
   become: true
+
+- name: Capture PCIe topology after PCIe configuration stage
+  ansible.builtin.command: lspci -Dnn
+  register: base_pcie_topology
+  changed_when: false
+  failed_when: false
+  when:
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+
+- name: Compute external PCIe domain detection state
+  ansible.builtin.set_fact:
+    base_pcie_external_domain_detected: >-
+      {{
+        (base_pcie_topology.stdout | default('') | regex_search('^0001:', multiline=True)) is not none
+      }}
+  when:
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+
+- name: Report PCIe topology after configuration stage
+  ansible.builtin.debug:
+    msg: >-
+      external_domain_detected={{ base_pcie_external_domain_detected | default(false) | bool }};
+      lspci='{{ base_pcie_topology.stdout | default('') | trim }}'.
+  when:
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+
+- name: Fail when declared PCIe expansion board is not enumerated
+  ansible.builtin.fail:
+    msg: >-
+      PCIe expansion board is declared present, but no external PCIe domain was detected
+      after configuration/reboot. Expected at least one 0001:* device in `lspci -Dnn`.
+      Current lspci output: {{ base_pcie_topology.stdout | default('') | trim }}.
+      This indicates a physical-link issue (board seating/cable/power) rather than
+      a config gate issue.
+  when:
+    - pcie_expansion_hat_declared_present | default(false) | bool
+    - pcie_expansion_fail_if_not_enumerated | default(false) | bool
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+    - not (base_pcie_external_domain_detected | default(false) | bool)
 
 - name: Compute DAC detection state
   ansible.builtin.set_fact:

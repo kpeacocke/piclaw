@@ -40,6 +40,9 @@ pcie_force_enable_require_hat_detection: false
 # Operator declaration for hosts known to have an external PCIe expansion board
 # even when HAT EEPROM strings are unavailable or non-standard.
 pcie_expansion_hat_declared_present: false
+# Fail after PCIe config stage when an expansion board is declared present but
+# no external PCIe domain enumerates (for example, missing 0001:* entries).
+pcie_expansion_fail_if_not_enumerated: false
 pcie_force_enable_fail_if_boot_config_missing: false
 pcie_force_enable_boot_config_candidates:
   - /boot/firmware/config.txt
