@@ -21,13 +21,6 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Auto-approve Dependabot PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr review "${PR_NUMBER}" --repo "${{ github.repository }}" --approve --body "Auto-approving Dependabot update."
-
       - name: Update branch when behind
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
