@@ -1,10 +1,213 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 run_full_upgrade: true
+hailo_run_if_detected: true
+
 # Enable PCIe Gen 3.0 — required for AI Kit (M.2 slot); not needed for AI HAT+ 2.
 pcie_gen3_enabled: false
+pcie_gen3_require_hat_detection: false
+pcie_gen3_fail_if_boot_config_missing: false
+pcie_gen3_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+
+# Shared expansion-board identity patterns used by detection-gated PCIe settings.
+# Each entry is matched as a substring of the normalised vendor+product+vcgencmd string.
+pcie_expansion_hat_match_patterns:
+  # Waveshare / 2-CH PCIe expansion board
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+  # Raspberry Pi AI HAT+ 2 (Hailo-10H)
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
+
+pcie_gen3_hat_match_patterns:
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
+
+# Safe PCIe interface enable flag for boards that are Gen2-only but may need explicit
+# PCIe enablement on some images/firmware combinations.
+pcie_force_enable: false
+pcie_force_enable_require_hat_detection: false
+# Operator declaration for hosts known to have an external PCIe expansion board
+# even when HAT EEPROM strings are unavailable or non-standard.
+pcie_expansion_hat_declared_present: false
+# Fail after PCIe config stage when an expansion board is declared present but
+# no external PCIe domain enumerates (for example, missing 0001:* entries).
+pcie_expansion_fail_if_not_enumerated: false
+pcie_force_enable_fail_if_boot_config_missing: false
+pcie_force_enable_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+
+# Optional NVMe long-term memory provisioning for Raspberry Pi M.2 HAT+ (SC1166).
+# Uses detect-and-configure flow and only formats when no filesystem is present.
+nvme_memory_enabled: false
+nvme_memory_require_hat_detection: true
+nvme_memory_fail_if_no_device: false
+nvme_memory_fail_if_boot_config_missing: false
+nvme_memory_fail_if_no_uuid: true
+nvme_memory_ensure_pcie_enabled: true
+nvme_memory_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+nvme_memory_hat_match_patterns:
+  - Raspberry Pi M.2 HAT+
+  - M.2 HAT+
+  - SC1166
+nvme_memory_target_device: ""
+nvme_memory_use_first_partition_if_present: true
+nvme_memory_filesystem: ext4
+nvme_memory_label: AI_MEMORY
+nvme_memory_mount_point: /srv/ai-memory
+nvme_memory_mount_owner: "{{ pi_user | default('pi') }}"
+nvme_memory_mount_group: "{{ pi_user | default('pi') }}"
+nvme_memory_mount_mode: "0775"
+nvme_memory_fstab_opts: defaults,noatime
 
 # OpenClaw currently requires Node.js >= 22.12.0.
 # Keep Node.js on the latest release for the selected major channel.
 bootstrap_nodejs_major: 24
 bootstrap_nodejs_min_version: 24.0.0
+
+# Optional DAC HAT audio configuration.
+# When enabled, the role disables onboard analog audio and adds a DAC overlay.
+audio_dac_enabled: false
+audio_dac_require_hat_detection: true
+audio_dac_overlay: hifiberry-dacplus-pro
+audio_dac_hat_match_patterns:
+  - DAC+ Pro
+  - DAC Pro
+  - DAC2 Pro
+  - IQaudIO DAC Pro
+  - HiFiBerry DAC+ Pro
+
+# Optional ALSA automation for Raspberry Pi OS once DAC is enabled.
+audio_dac_configure_alsa_default: true
+audio_dac_verify_playback_device: true
+audio_dac_fail_if_alsa_card_missing: false
+audio_dac_fail_if_boot_config_missing: false
+audio_dac_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+audio_dac_alsa_card_match_patterns:
+  - snd_rpi_hifiberry
+  - sndrpihifiberry
+  - iqaudio
+  - hifiberry
+  - dac
+
+# Optional Raspberry Pi AI Camera (IMX500) support.
+# Official docs require installing `imx500-all` on Raspberry Pi OS.
+ai_camera_enabled: false
+ai_camera_require_detection: true
+ai_camera_fail_if_not_detected: false
+ai_camera_detect_match_patterns:
+  - imx500
+  - ai camera
+ai_camera_install_packages:
+  - imx500-all
+ai_camera_install_picamera2_opencv_extras: false
+ai_camera_picamera2_extra_packages:
+  - python3-opencv
+  - python3-munkres
+
+# Optional Raspberry Pi Touch Display 2 setup.
+# On Pi B+ and later, display is auto-detected; these options keep config safe
+# and allow optional touch overlay tuning when needed.
+touch_display2_enabled: false
+touch_display2_require_detection: true
+touch_display2_fail_if_not_detected: false
+touch_display2_fail_if_boot_config_missing: false
+touch_display2_detect_match_patterns:
+  - 720x1280
+  - ili9881
+  - touch display 2
+touch_display2_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+touch_display2_force_display_auto_detect: true
+touch_display2_disable_touchscreen: false
+touch_display2_configure_touch_overlay: false
+touch_display2_model: 7inch
+touch_display2_touch_overlay_options: []
+
+# Optional Raspberry Pi Sense HAT setup.
+# Official docs: install `sense-hat`; package enables required dependencies and I2C.
+sense_hat_enabled: false
+sense_hat_require_detection: true
+sense_hat_fail_if_not_detected: false
+sense_hat_fail_if_boot_config_missing: false
+sense_hat_detect_match_patterns:
+  - Sense HAT
+  - Raspberry Pi Sense HAT
+sense_hat_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+sense_hat_ensure_i2c_arm: true
+sense_hat_install_packages:
+  - sense-hat
+
+# Optional Waveshare UPS HAT (E) support.
+# Vendor docs indicate I2C is required and demo tooling uses python3-smbus.
+ups_hat_e_enabled: false
+ups_hat_e_require_detection: true
+ups_hat_e_fail_if_not_detected: false
+ups_hat_e_fail_if_boot_config_missing: false
+ups_hat_e_detect_match_patterns:
+  - UPS HAT (E)
+  - UPS HAT E
+  - Waveshare
+ups_hat_e_i2c_detect_addresses:
+  - "1-002d"
+ups_hat_e_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+ups_hat_e_ensure_i2c_arm: true
+ups_hat_e_enable_usb_max_current: false
+ups_hat_e_install_packages:
+  - i2c-tools
+  - python3-smbus
+
+# Optional Waveshare 4.3" UART e-Paper support.
+# Uses the same behavior as raspi-config serial settings:
+# - serial console disabled
+# - serial hardware enabled
+uart_epaper_enabled: false
+uart_epaper_enable_hardware_uart: true
+uart_epaper_disable_serial_console: true
+uart_epaper_configure_pi5_uart0: true
+uart_epaper_require_serial_device: true
+uart_epaper_fail_if_serial_device_missing: false
+uart_epaper_fail_if_boot_config_missing: false
+uart_epaper_fail_if_cmdline_missing: false
+uart_epaper_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+uart_epaper_cmdline_candidates:
+  - /boot/firmware/cmdline.txt
+  - /boot/cmdline.txt
+uart_epaper_reserve_gpio_wakeup: true
+uart_epaper_wakeup_gpio: 26
+uart_epaper_wakeup_gpio_state: dl
+uart_epaper_reserve_gpio_reset: true
+uart_epaper_reset_gpio: 27
+uart_epaper_reset_gpio_state: dh
+uart_epaper_install_pyserial: true
+uart_epaper_pyserial_package: python3-serial
+uart_epaper_service_name: uart-epaper
+uart_epaper_service_user: root
+uart_epaper_service_group: root
+uart_epaper_app_dir: /opt/piclaw/epaper
+uart_epaper_app_path: /opt/piclaw/epaper/epaper.py
+uart_epaper_serial_device: auto
+uart_epaper_baud_rate: 115200
+uart_epaper_refresh_seconds: 300

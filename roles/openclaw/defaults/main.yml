@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 claw_flavor: openclaw
 openclaw_profile: local-safe
+openclaw_auto_fallback_to_external_when_no_hailo: false
 
 # Local backend controls (used by local-safe profile)
 use_sanitizer_proxy: true
