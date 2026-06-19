@@ -8,6 +8,49 @@
     - ../group_vars/pi5.yml
 
   pre_tasks:
+    - name: Detect Hailo PCIe device presence
+      ansible.builtin.command: lspci -nn
+      register: openclaw_lspci
+      changed_when: false
+      failed_when: false
+
+    - name: Compute Hailo hardware detection state
+      ansible.builtin.set_fact:
+        hailo_hw_detected: >-
+          {{
+            (openclaw_lspci.stdout | default('') | regex_search('hailo', ignorecase=True)) is not none
+          }}
+
+    - name: Auto-fallback OpenClaw profile when Hailo is not detected
+      ansible.builtin.set_fact:
+        openclaw_profile: external-power
+      when:
+        - (openclaw_auto_fallback_to_external_when_no_hailo | default(false) | bool)
+        - (hailo_run_if_detected | default(true) | bool)
+        - openclaw_profile == 'local-safe'
+        - not (hailo_hw_detected | bool)
+
+    - name: Report OpenClaw profile fallback decision
+      ansible.builtin.debug:
+        msg: >-
+          Hailo was not detected; switching OpenClaw profile from local-safe to external-power.
+      when:
+        - (openclaw_auto_fallback_to_external_when_no_hailo | default(false) | bool)
+        - (hailo_run_if_detected | default(true) | bool)
+        - openclaw_profile == 'external-power'
+        - not (hailo_hw_detected | bool)
+
+    - name: Assert local-safe profile has detected Hailo hardware
+      ansible.builtin.assert:
+        that:
+          - (hailo_hw_detected | bool)
+        fail_msg: >-
+          openclaw_profile=local-safe requires Hailo hardware, but no Hailo PCIe device was detected.
+          Set openclaw_profile=external-power or attach a supported Hailo board.
+      when:
+        - (hailo_run_if_detected | default(true) | bool)
+        - openclaw_profile == 'local-safe'
+
     - name: Verify Tailscale is active and healthy
       ansible.builtin.systemd:
         name: tailscaled
@@ -95,23 +138,12 @@
   roles:
     - role: docker
     - role: hailo_ollama
+      when: >-
+        openclaw_profile == 'local-safe'
+        and
+        (
+          (not (hailo_run_if_detected | default(true) | bool))
+          or
+          (hailo_hw_detected | default(false) | bool)
+        )
     - role: openclaw
-
-  post_tasks:
-    - name: Configure Tailscale serve to expose OpenClaw gateway
-      ansible.builtin.command: >
-        tailscale serve tcp/{{ openclaw_gateway_port }} http://127.0.0.1:{{ openclaw_gateway_port }}
-      register: tailscale_serve_result
-      changed_when: false
-      failed_when: false
-
-    - name: Verify Tailscale serve is configured for OpenClaw
-      ansible.builtin.command: >
-        tailscale serve status --json
-      register: tailscale_serve_status
-      changed_when: false
-      failed_when: false
-
-    - name: Display Tailscale serve configuration for debugging
-      ansible.builtin.debug:
-        var: tailscale_serve_status.stdout | from_json

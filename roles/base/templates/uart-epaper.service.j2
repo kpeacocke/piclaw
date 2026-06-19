@@ -1,0 +1,21 @@
+[Unit]
+Description=Waveshare UART e-Paper Status Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ uart_epaper_service_user }}
+Group={{ uart_epaper_service_group }}
+Environment=EPAPER_SERIAL_DEVICE={{ uart_epaper_serial_device }}
+Environment=EPAPER_BAUD_RATE={{ uart_epaper_baud_rate }}
+Environment=EPAPER_REFRESH_SECONDS={{ uart_epaper_refresh_seconds }}
+Environment=EPAPER_WAKE_GPIO={{ uart_epaper_wakeup_gpio }}
+Environment=EPAPER_RESET_GPIO={{ uart_epaper_reset_gpio }}
+ExecStart={{ uart_epaper_app_path }}
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -10,4 +10,13 @@
   roles:
     - role: tailscale
     - role: base
+    - role: base
+      when: >-
+        (pcie_force_enable_config is defined and pcie_force_enable_config.changed)
+        or
+        (pcie_gen3_config is defined and pcie_gen3_config.changed)
     - role: hailo
+      when: >-
+        (not (hailo_run_if_detected | default(true) | bool))
+        or
+        (hailo_hw_detected | default(false) | bool)

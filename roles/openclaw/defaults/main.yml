@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 claw_flavor: openclaw
 openclaw_profile: local-safe
+openclaw_auto_fallback_to_external_when_no_hailo: false
 
 # Local backend controls (used by local-safe profile)
 use_sanitizer_proxy: true
@@ -49,7 +50,7 @@ openclaw_user_config_path: "{{ openclaw_user_config_dir }}/openclaw.json"
 openclaw_auth_profiles_path: "{{ openclaw_user_config_dir }}/agents/main/agent/auth-profiles.json"
 openclaw_gateway_port: 18789
 openclaw_gateway_bind_host: 127.0.0.1
-openclaw_gateway_bind_mode: loopback
+openclaw_gateway_bind_mode: tailnet
 openclaw_gateway_tailscale_mode: "{{ 'serve' if openclaw_gateway_bind_mode == 'loopback' else 'off' }}"
 openclaw_gateway_auth_mode: none
 openclaw_gateway_trusted_proxies:
@@ -61,6 +62,7 @@ openclaw_tools_deny:
   - browser
 openclaw_no_respawn: true
 openclaw_node_compile_cache_dir: /var/tmp/openclaw-compile-cache
+openclaw_shell_env_path: /etc/profile.d/openclaw-env.sh
 openclaw_doctor_auto_fix: false
 openclaw_npm_package: openclaw
 openclaw_npm_package_version: "2026.4.2"

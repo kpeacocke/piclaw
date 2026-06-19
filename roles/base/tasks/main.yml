@@ -1,21 +1,1403 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
+- name: Read HAT product from firmware device tree
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -f /proc/device-tree/hat/product ]; then
+      tr -d '\0' < /proc/device-tree/hat/product
+    fi
+  args:
+    executable: /bin/bash
+  register: base_hat_product_raw
+  changed_when: false
+  failed_when: false
+
+- name: Read HAT vendor from firmware device tree
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -f /proc/device-tree/hat/vendor ]; then
+      tr -d '\0' < /proc/device-tree/hat/vendor
+    fi
+  args:
+    executable: /bin/bash
+  register: base_hat_vendor_raw
+  changed_when: false
+  failed_when: false
+
+- name: Read HAT details from vcgencmd as fallback
+  ansible.builtin.shell: |
+    set -o pipefail
+    if command -v vcgencmd >/dev/null 2>&1; then
+      vcgencmd hat
+    fi
+  args:
+    executable: /bin/bash
+  register: base_hat_vcgencmd_raw
+  changed_when: false
+  failed_when: false
+
+- name: Report raw HAT EEPROM and vcgencmd values
+  ansible.builtin.debug:
+    msg: >
+      HAT EEPROM vendor='{{ base_hat_vendor_raw.stdout | default('') | trim }}'
+      product='{{ base_hat_product_raw.stdout | default('') | trim }}'
+      vcgencmd_stdout='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}'
+      vcgencmd_stderr='{{ base_hat_vcgencmd_raw.stderr | default('') | trim }}'
+
+- name: Compute base HAT facts
+  ansible.builtin.set_fact:
+    base_hat_product: "{{ base_hat_product_raw.stdout | default('') | trim }}"
+    base_hat_vendor: "{{ base_hat_vendor_raw.stdout | default('') | trim }}"
+
+- name: Compute normalized PCIe HAT signature
+  ansible.builtin.set_fact:
+    base_pcie_hat_signature_normalized: >-
+      {{
+        (
+          ((base_hat_vendor_raw.stdout | default('') | trim)
+          ~ ' '
+          ~ (base_hat_product_raw.stdout | default('') | trim)
+          ~ ' '
+          ~ (base_hat_vcgencmd_raw.stdout | default('') | trim)
+          ~ ' '
+          ~ (base_hat_vcgencmd_raw.stderr | default('') | trim))
+          | lower
+          | regex_replace('[^a-z0-9]+', ' ')
+          | trim
+        )
+      }}
+
+- name: Compute effective PCIe HAT match patterns
+  ansible.builtin.set_fact:
+    base_pcie_hat_match_patterns_effective: >-
+      {{
+        pcie_expansion_hat_match_patterns
+        | default(pcie_gen3_hat_match_patterns, true)
+      }}
+
+- name: Normalize PCIe HAT match patterns
+  ansible.builtin.set_fact:
+    base_pcie_hat_match_patterns_normalized: >-
+      {{
+        (
+          base_pcie_hat_match_patterns_effective
+          | map('lower')
+          | map('regex_replace', '[^a-z0-9]+', ' ')
+          | map('trim')
+          | reject('equalto', '')
+          | list
+        )
+      }}
+
+- name: Compute PCIe expansion detection state
+  ansible.builtin.set_fact:
+    base_pcie_expansion_hat_detected: >-
+      {{
+        (
+          (
+            base_pcie_hat_match_patterns_normalized
+            | select('in', base_pcie_hat_signature_normalized)
+            | list
+            | length
+          ) > 0
+        )
+        or
+        (pcie_expansion_hat_declared_present | default(false) | bool)
+      }}
+
+- name: Compute PCIe force-enable application flag
+  ansible.builtin.set_fact:
+    base_pcie_force_enable_should_configure: >-
+      {{
+        (pcie_force_enable | bool)
+        and
+        ((not pcie_force_enable_require_hat_detection | bool) or base_pcie_expansion_hat_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for PCIe enablement
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ pcie_force_enable_boot_config_candidates }}"
+  register: base_pcie_force_enable_boot_config_probe
+  when: base_pcie_force_enable_should_configure | bool
+
+- name: Select detected Raspberry Pi boot config path for PCIe enablement
+  ansible.builtin.set_fact:
+    base_pcie_force_enable_boot_config_path: >-
+      {{
+        (
+          base_pcie_force_enable_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when: base_pcie_force_enable_should_configure | bool
+
+- name: Warn when no Raspberry Pi boot config path is detected for PCIe enablement
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ pcie_force_enable_boot_config_candidates }};
+      skipping PCIe enablement safely.
+  when:
+    - base_pcie_force_enable_should_configure | bool
+    - (base_pcie_force_enable_boot_config_path | default('') | length) == 0
+
+- name: Fail when PCIe enablement boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ pcie_force_enable_boot_config_candidates }}.
+      Cannot apply PCIe enablement safely on this OS/image.
+  when:
+    - base_pcie_force_enable_should_configure | bool
+    - pcie_force_enable_fail_if_boot_config_missing | bool
+    - (base_pcie_force_enable_boot_config_path | default('') | length) == 0
+
+- name: Ensure PCIe interface is explicitly enabled when required
+  ansible.builtin.lineinfile:
+    path: "{{ base_pcie_force_enable_boot_config_path }}"
+    regexp: '^dtparam=pciex1($|=)'
+    line: dtparam=pciex1
+    state: present
+  when:
+    - base_pcie_force_enable_should_configure | bool
+    - (base_pcie_force_enable_boot_config_path | default('') | length) > 0
+  register: pcie_force_enable_config
+  become: true
+
+- name: Report PCIe enablement skip when expansion HAT is not detected
+  ansible.builtin.debug:
+    msg: >-
+      pcie_force_enable=true but no matching PCIe expansion HAT was detected;
+      skipping PCIe enablement. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}', normalized='{{ base_pcie_hat_signature_normalized }}',
+      vcgencmd='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}',
+      match_patterns={{ base_pcie_hat_match_patterns_effective }},
+      declared_present={{ pcie_expansion_hat_declared_present | default(false) | bool }}.
+  when:
+    - pcie_force_enable | bool
+    - pcie_force_enable_require_hat_detection | bool
+    - not base_pcie_expansion_hat_detected | bool
+
+- name: Compute PCIe Gen3 application flag
+  ansible.builtin.set_fact:
+    base_pcie_gen3_should_configure: >-
+      {{
+        (pcie_gen3_enabled | bool)
+        and
+        ((not pcie_gen3_require_hat_detection | bool) or base_pcie_expansion_hat_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for PCIe tuning
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ pcie_gen3_boot_config_candidates }}"
+  register: base_pcie_gen3_boot_config_probe
+  when: base_pcie_gen3_should_configure | bool
+
+- name: Select detected Raspberry Pi boot config path for PCIe tuning
+  ansible.builtin.set_fact:
+    base_pcie_gen3_boot_config_path: >-
+      {{
+        (
+          base_pcie_gen3_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when: base_pcie_gen3_should_configure | bool
+
+- name: Warn when no Raspberry Pi boot config path is detected for PCIe tuning
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ pcie_gen3_boot_config_candidates }};
+      skipping PCIe Gen3 tuning safely.
+  when:
+    - base_pcie_gen3_should_configure | bool
+    - (base_pcie_gen3_boot_config_path | default('') | length) == 0
+
+- name: Fail when PCIe Gen3 boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ pcie_gen3_boot_config_candidates }}.
+      Cannot apply PCIe Gen3 tuning safely on this OS/image.
+  when:
+    - base_pcie_gen3_should_configure | bool
+    - pcie_gen3_fail_if_boot_config_missing | bool
+    - (base_pcie_gen3_boot_config_path | default('') | length) == 0
+
 - name: Ensure PCIe Gen 3.0 is configured in config.txt
   ansible.builtin.lineinfile:
-    path: /boot/firmware/config.txt
+    path: "{{ base_pcie_gen3_boot_config_path }}"
     regexp: '^dtparam=pciex1_gen='
     line: dtparam=pciex1_gen=3
     state: present
-  when: pcie_gen3_enabled | bool
+  when:
+    - base_pcie_gen3_should_configure | bool
+    - (base_pcie_gen3_boot_config_path | default('') | length) > 0
   register: pcie_gen3_config
   become: true
 
+- name: Remove PCIe Gen3 override when PCIe Gen3 tuning is disabled
+  ansible.builtin.lineinfile:
+    path: "{{ base_pcie_force_enable_boot_config_path }}"
+    regexp: '^dtparam=pciex1_gen='
+    state: absent
+  when:
+    - pcie_force_enable | bool
+    - not pcie_gen3_enabled | bool
+    - base_pcie_force_enable_should_configure | bool
+    - (base_pcie_force_enable_boot_config_path | default('') | length) > 0
+  register: pcie_gen3_disable_config
+  become: true
+
+- name: Report PCIe Gen3 configuration skip when expansion HAT is not detected
+  ansible.builtin.debug:
+    msg: >-
+      pcie_gen3_enabled=true but no matching PCIe expansion HAT was detected;
+      skipping PCIe Gen3 tuning. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}', normalized='{{ base_pcie_hat_signature_normalized }}',
+      vcgencmd='{{ base_hat_vcgencmd_raw.stdout | default('') | trim }}',
+      match_patterns={{ base_pcie_hat_match_patterns_effective }},
+      declared_present={{ pcie_expansion_hat_declared_present | default(false) | bool }}.
+  when:
+    - pcie_gen3_enabled | bool
+    - pcie_gen3_require_hat_detection | bool
+    - not base_pcie_expansion_hat_detected | bool
+
 - name: Reboot after PCIe Gen 3.0 configuration change
   ansible.builtin.reboot:
-    msg: Reboot initiated by Ansible after PCIe Gen 3.0 configuration.
+    msg: Reboot initiated by Ansible after PCIe configuration.
     reboot_timeout: 900
     post_reboot_delay: 10
-  when: pcie_gen3_config is defined and pcie_gen3_config.changed
+  when: >-
+    (pcie_gen3_config is defined and pcie_gen3_config.changed) or
+    (pcie_gen3_disable_config is defined and pcie_gen3_disable_config.changed) or
+    (pcie_force_enable_config is defined and pcie_force_enable_config.changed)
+  become: true
+
+- name: Capture PCIe topology after PCIe configuration stage
+  ansible.builtin.command: lspci -Dnn
+  register: base_pcie_topology
+  changed_when: false
+  failed_when: false
+  when:
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+
+- name: Compute external PCIe domain detection state
+  ansible.builtin.set_fact:
+    base_pcie_external_domain_detected: >-
+      {{
+        (base_pcie_topology.stdout | default('') | regex_search('^0001:', multiline=True)) is not none
+      }}
+  when:
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+
+- name: Report PCIe topology after configuration stage
+  ansible.builtin.debug:
+    msg: >-
+      external_domain_detected={{ base_pcie_external_domain_detected | default(false) | bool }};
+      lspci='{{ base_pcie_topology.stdout | default('') | trim }}'.
+  when:
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+
+- name: Fail when declared PCIe expansion board is not enumerated
+  ansible.builtin.fail:
+    msg: >-
+      PCIe expansion board is declared present, but no external PCIe domain was detected
+      after configuration/reboot. Expected at least one 0001:* device in `lspci -Dnn`.
+      Current lspci output: {{ base_pcie_topology.stdout | default('') | trim }}.
+      This indicates a physical-link issue (board seating/cable/power) rather than
+      a config gate issue.
+  when:
+    - pcie_expansion_hat_declared_present | default(false) | bool
+    - pcie_expansion_fail_if_not_enumerated | default(false) | bool
+    - pcie_force_enable | bool or pcie_gen3_enabled | bool
+    - not (base_pcie_external_domain_detected | default(false) | bool)
+
+- name: Compute DAC detection state
+  ansible.builtin.set_fact:
+    base_hat_product: "{{ base_hat_product_raw.stdout | default('') | trim }}"
+    base_hat_vendor: "{{ base_hat_vendor_raw.stdout | default('') | trim }}"
+    base_audio_dac_detect_regex: >-
+      {{ audio_dac_hat_match_patterns | map('regex_escape') | join('|') }}
+    base_audio_dac_detected: >-
+      {{
+        (((base_hat_vendor_raw.stdout | default('') | trim) ~ ' ' ~ (base_hat_product_raw.stdout | default('') | trim))
+          | regex_search(audio_dac_hat_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none
+      }}
+
+- name: Compute DAC application flag
+  ansible.builtin.set_fact:
+    base_audio_dac_should_configure: >-
+      {{
+        (audio_dac_enabled | bool)
+        and
+        ((not audio_dac_require_hat_detection | bool) or base_audio_dac_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ audio_dac_boot_config_candidates }}"
+  register: base_audio_dac_boot_config_probe
+  when: base_audio_dac_should_configure | bool
+
+- name: Select detected Raspberry Pi boot config path
+  ansible.builtin.set_fact:
+    base_audio_dac_boot_config_path: >-
+      {{
+        (
+          base_audio_dac_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when: base_audio_dac_should_configure | bool
+
+- name: Warn when no Raspberry Pi boot config path is detected
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ audio_dac_boot_config_candidates }};
+      skipping DAC config safely.
+  when:
+    - base_audio_dac_should_configure | bool
+    - (base_audio_dac_boot_config_path | default('') | length) == 0
+
+- name: Fail when boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ audio_dac_boot_config_candidates }}.
+      Cannot apply DAC overlay safely on this OS/image.
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_fail_if_boot_config_missing | bool
+    - (base_audio_dac_boot_config_path | default('') | length) == 0
+
+- name: Ensure onboard audio is disabled for external DAC
+  ansible.builtin.lineinfile:
+    path: "{{ base_audio_dac_boot_config_path }}"
+    regexp: '^dtparam=audio='
+    line: dtparam=audio=off
+    state: present
+  when:
+    - base_audio_dac_should_configure | bool
+    - (base_audio_dac_boot_config_path | default('') | length) > 0
+  register: base_dac_audio_dtparam_config
+  become: true
+
+- name: Ensure DAC overlay is configured
+  ansible.builtin.lineinfile:
+    path: "{{ base_audio_dac_boot_config_path }}"
+    regexp: '^dtoverlay={{ audio_dac_overlay | regex_escape }}$'
+    line: "dtoverlay={{ audio_dac_overlay }}"
+    state: present
+  when:
+    - base_audio_dac_should_configure | bool
+    - (base_audio_dac_boot_config_path | default('') | length) > 0
+  register: base_dac_overlay_config
+  become: true
+
+- name: Report DAC configuration skip when HAT is not detected
+  ansible.builtin.debug:
+    msg: >-
+      audio_dac_enabled=true but no matching DAC HAT was detected;
+      skipping DAC config. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}'.
+  when:
+    - audio_dac_enabled | bool
+    - audio_dac_require_hat_detection | bool
+    - not base_audio_dac_detected | bool
+
+- name: Detect DSI display connectors and modes
+  ansible.builtin.shell: |
+    set -o pipefail
+    for node in /sys/class/drm/card*-DSI-*; do
+      [ -d "$node" ] || continue
+      status="$(cat "$node/status" 2>/dev/null || true)"
+      modes="$(tr '\n' ' ' < "$node/modes" 2>/dev/null || true)"
+      printf '%s status=%s modes=%s\n' "$node" "$status" "$modes"
+    done
+  args:
+    executable: /bin/bash
+  register: base_touch_display2_drm
+  changed_when: false
+  failed_when: false
+
+- name: Compute Touch Display 2 detection state
+  ansible.builtin.set_fact:
+    base_touch_display2_detected: >-
+      {{
+        (
+          (base_touch_display2_drm.stdout | default('')
+            | regex_search('status=connected', ignorecase=True)) is not none
+        )
+        and
+        (
+          (base_touch_display2_drm.stdout | default('')
+            | regex_search(touch_display2_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+      }}
+
+- name: Compute Touch Display 2 application flag
+  ansible.builtin.set_fact:
+    base_touch_display2_should_configure: >-
+      {{
+        (touch_display2_enabled | bool)
+        and
+        ((not touch_display2_require_detection | bool) or base_touch_display2_detected)
+      }}
+
+- name: Compute Touch Display 2 boot-config edit requirement
+  ansible.builtin.set_fact:
+    base_touch_display2_should_edit_boot_config: >-
+      {{
+        (touch_display2_force_display_auto_detect | bool)
+        or (touch_display2_disable_touchscreen | bool)
+        or (touch_display2_configure_touch_overlay | bool)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for Touch Display 2
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ touch_display2_boot_config_candidates }}"
+  register: base_touch_display2_boot_config_probe
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+
+- name: Select detected Raspberry Pi boot config path for Touch Display 2
+  ansible.builtin.set_fact:
+    base_touch_display2_boot_config_path: >-
+      {{
+        (
+          base_touch_display2_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+
+- name: Warn when no boot config path is detected for Touch Display 2
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ touch_display2_boot_config_candidates }};
+      skipping Touch Display 2 config safely.
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+    - (base_touch_display2_boot_config_path | default('') | length) == 0
+
+- name: Fail when Touch Display 2 boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ touch_display2_boot_config_candidates }}.
+      Cannot apply Touch Display 2 config safely on this OS/image.
+  when:
+    - base_touch_display2_should_configure | bool
+    - base_touch_display2_should_edit_boot_config | bool
+    - touch_display2_fail_if_boot_config_missing | bool
+    - (base_touch_display2_boot_config_path | default('') | length) == 0
+
+- name: Ensure display auto-detection is enabled for Touch Display 2
+  ansible.builtin.lineinfile:
+    path: "{{ base_touch_display2_boot_config_path }}"
+    regexp: '^display_auto_detect='
+    line: display_auto_detect=1
+    state: present
+  when:
+    - base_touch_display2_should_configure | bool
+    - touch_display2_force_display_auto_detect | bool
+    - (base_touch_display2_boot_config_path | default('') | length) > 0
+  register: base_touch_display2_auto_detect_config
+  become: true
+
+- name: Ensure touchscreen disable line state for Touch Display 2
+  ansible.builtin.lineinfile:
+    path: "{{ base_touch_display2_boot_config_path }}"
+    regexp: '^disable_touchscreen='
+    line: disable_touchscreen=1
+    state: "{{ 'present' if (touch_display2_disable_touchscreen | bool) else 'absent' }}"
+  when:
+    - base_touch_display2_should_configure | bool
+    - (base_touch_display2_boot_config_path | default('') | length) > 0
+  register: base_touch_display2_disable_touch_config
+  become: true
+
+- name: Compute Touch Display 2 overlay line
+  ansible.builtin.set_fact:
+    base_touch_display2_overlay_line: >-
+      {{
+        'dtoverlay=vc4-kms-dsi-ili9881-' ~ touch_display2_model
+        ~ (
+          ',' ~ (touch_display2_touch_overlay_options | join(','))
+          if (touch_display2_touch_overlay_options | length) > 0
+          else ''
+        )
+      }}
+  when:
+    - base_touch_display2_should_configure | bool
+    - touch_display2_configure_touch_overlay | bool
+
+- name: Ensure Touch Display 2 overlay line is present when requested
+  ansible.builtin.lineinfile:
+    path: "{{ base_touch_display2_boot_config_path }}"
+    regexp: '^dtoverlay=vc4-kms-dsi-ili9881-(5inch|7inch)(,.*)?$'
+    line: "{{ base_touch_display2_overlay_line }}"
+    state: present
+  when:
+    - base_touch_display2_should_configure | bool
+    - touch_display2_configure_touch_overlay | bool
+    - (base_touch_display2_boot_config_path | default('') | length) > 0
+  register: base_touch_display2_overlay_config
+  become: true
+
+- name: Report Touch Display 2 configuration skip when panel is not detected
+  ansible.builtin.debug:
+    msg: >-
+      touch_display2_enabled=true but Touch Display 2 was not detected;
+      skipping Touch Display 2 config.
+      drm='{{ base_touch_display2_drm.stdout | default('') | trim }}'.
+  when:
+    - touch_display2_enabled | bool
+    - touch_display2_require_detection | bool
+    - not base_touch_display2_detected | bool
+
+- name: Fail when Touch Display 2 detection is required but panel is not detected
+  ansible.builtin.fail:
+    msg: >-
+      touch_display2_enabled=true but Touch Display 2 was not detected.
+      Check DSI and GPIO power cabling, then retry.
+  when:
+    - touch_display2_enabled | bool
+    - touch_display2_require_detection | bool
+    - touch_display2_fail_if_not_detected | bool
+    - not base_touch_display2_detected | bool
+
+- name: Detect Sense HAT joystick input device
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [ -r /proc/bus/input/devices ]; then
+      grep -i 'Sense HAT Joystick' /proc/bus/input/devices || true
+    fi
+  args:
+    executable: /bin/bash
+  register: base_sense_hat_joystick
+  changed_when: false
+  failed_when: false
+
+- name: Compute Sense HAT detection state
+  ansible.builtin.set_fact:
+    base_sense_hat_detected: >-
+      {{
+        (
+          (((base_hat_vendor | default('') | trim) ~ ' ' ~ (base_hat_product | default('') | trim))
+            | regex_search(sense_hat_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+        or
+        (
+          (base_sense_hat_joystick.stdout | default('')
+            | regex_search('Sense HAT Joystick', ignorecase=True)) is not none
+        )
+      }}
+
+- name: Compute Sense HAT application flag
+  ansible.builtin.set_fact:
+    base_sense_hat_should_configure: >-
+      {{
+        (sense_hat_enabled | bool)
+        and
+        ((not sense_hat_require_detection | bool) or base_sense_hat_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for Sense HAT I2C
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ sense_hat_boot_config_candidates }}"
+  register: base_sense_hat_boot_config_probe
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+
+- name: Select detected Raspberry Pi boot config path for Sense HAT I2C
+  ansible.builtin.set_fact:
+    base_sense_hat_boot_config_path: >-
+      {{
+        (
+          base_sense_hat_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+
+- name: Warn when no boot config path is detected for Sense HAT I2C
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ sense_hat_boot_config_candidates }};
+      skipping Sense HAT I2C config safely.
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+    - (base_sense_hat_boot_config_path | default('') | length) == 0
+
+- name: Fail when Sense HAT I2C boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ sense_hat_boot_config_candidates }}.
+      Cannot apply Sense HAT I2C config safely on this OS/image.
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+    - sense_hat_fail_if_boot_config_missing | bool
+    - (base_sense_hat_boot_config_path | default('') | length) == 0
+
+- name: Ensure I2C is enabled for Sense HAT
+  ansible.builtin.lineinfile:
+    path: "{{ base_sense_hat_boot_config_path }}"
+    regexp: '^dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+    state: present
+  when:
+    - base_sense_hat_should_configure | bool
+    - sense_hat_ensure_i2c_arm | bool
+    - (base_sense_hat_boot_config_path | default('') | length) > 0
+  register: base_sense_hat_i2c_config
+  become: true
+
+- name: Report Sense HAT configuration skip when board is not detected
+  ansible.builtin.debug:
+    msg: >-
+      sense_hat_enabled=true but Sense HAT was not detected;
+      skipping Sense HAT setup. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}'.
+  when:
+    - sense_hat_enabled | bool
+    - sense_hat_require_detection | bool
+    - not base_sense_hat_detected | bool
+
+- name: Fail when Sense HAT detection is required but board is not detected
+  ansible.builtin.fail:
+    msg: >-
+      sense_hat_enabled=true but Sense HAT was not detected.
+      Check GPIO/HAT seating, then retry.
+  when:
+    - sense_hat_enabled | bool
+    - sense_hat_require_detection | bool
+    - sense_hat_fail_if_not_detected | bool
+    - not base_sense_hat_detected | bool
+
+- name: Detect UPS HAT(E) I2C device nodes
+  ansible.builtin.shell: |
+    set -o pipefail
+    for addr in {{ ups_hat_e_i2c_detect_addresses | map('quote') | join(' ') }}; do
+      if [ -e "/sys/bus/i2c/devices/${addr}" ]; then
+        echo "${addr}"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: base_ups_hat_e_i2c_nodes
+  changed_when: false
+  failed_when: false
+
+- name: Compute UPS HAT(E) detection state
+  ansible.builtin.set_fact:
+    base_ups_hat_e_detected: >-
+      {{
+        (
+          (((base_hat_vendor | default('') | trim) ~ ' ' ~ (base_hat_product | default('') | trim))
+            | regex_search(ups_hat_e_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+          is not none
+        )
+        or ((base_ups_hat_e_i2c_nodes.stdout_lines | default([]) | length) > 0)
+      }}
+
+- name: Compute UPS HAT(E) application flag
+  ansible.builtin.set_fact:
+    base_ups_hat_e_should_configure: >-
+      {{
+        (ups_hat_e_enabled | bool)
+        and
+        ((not ups_hat_e_require_detection | bool) or base_ups_hat_e_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for UPS HAT(E)
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ ups_hat_e_boot_config_candidates }}"
+  register: base_ups_hat_e_boot_config_probe
+  when: base_ups_hat_e_should_configure | bool
+
+- name: Select detected Raspberry Pi boot config path for UPS HAT(E)
+  ansible.builtin.set_fact:
+    base_ups_hat_e_boot_config_path: >-
+      {{
+        (
+          base_ups_hat_e_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when: base_ups_hat_e_should_configure | bool
+
+- name: Warn when no boot config path is detected for UPS HAT(E)
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ ups_hat_e_boot_config_candidates }};
+      skipping UPS HAT(E) config safely.
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) == 0
+
+- name: Fail when UPS HAT(E) boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ ups_hat_e_boot_config_candidates }}.
+      Cannot apply UPS HAT(E) config safely on this OS/image.
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - ups_hat_e_fail_if_boot_config_missing | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) == 0
+
+- name: Ensure I2C is enabled for UPS HAT(E)
+  ansible.builtin.lineinfile:
+    path: "{{ base_ups_hat_e_boot_config_path }}"
+    regexp: '^dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+    state: present
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - ups_hat_e_ensure_i2c_arm | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) > 0
+  register: base_ups_hat_e_i2c_arm_config
+  become: true
+
+- name: Optionally enable USB max current flag for Pi power warning mitigation
+  ansible.builtin.lineinfile:
+    path: "{{ base_ups_hat_e_boot_config_path }}"
+    regexp: '^usb_max_current_enable='
+    line: usb_max_current_enable=1
+    state: present
+  when:
+    - base_ups_hat_e_should_configure | bool
+    - ups_hat_e_enable_usb_max_current | bool
+    - (base_ups_hat_e_boot_config_path | default('') | length) > 0
+  register: base_ups_hat_e_usb_current_config
+  become: true
+
+- name: Report UPS HAT(E) configuration skip when board is not detected
+  ansible.builtin.debug:
+    msg: >-
+      ups_hat_e_enabled=true but UPS HAT(E) was not detected;
+      skipping setup. Detected vendor='{{ base_hat_vendor }}', product='{{ base_hat_product }}',
+      i2c_nodes={{ base_ups_hat_e_i2c_nodes.stdout_lines | default([]) }}.
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_require_detection | bool
+    - not base_ups_hat_e_detected | bool
+
+- name: Fail when UPS HAT(E) detection is required but board is not detected
+  ansible.builtin.fail:
+    msg: >-
+      ups_hat_e_enabled=true but UPS HAT(E) was not detected.
+      Check pogo-pin seating, battery assembly, and I2C availability.
+  when:
+    - ups_hat_e_enabled | bool
+    - ups_hat_e_require_detection | bool
+    - ups_hat_e_fail_if_not_detected | bool
+    - not base_ups_hat_e_detected | bool
+
+- name: Read Raspberry Pi model for UART e-paper serial setup
+  ansible.builtin.shell: |
+    set -o pipefail
+    tr -d '\0' < /proc/device-tree/model
+  args:
+    executable: /bin/bash
+  register: base_model_raw
+  changed_when: false
+  failed_when: false
+  when: uart_epaper_enabled | bool
+
+- name: Compute UART e-paper model facts
+  ansible.builtin.set_fact:
+    base_is_pi5: >-
+      {{
+        (base_model_raw.stdout | default('') | regex_search('Raspberry Pi 5', ignorecase=True))
+        is not none
+      }}
+    base_uart_epaper_should_configure: "{{ uart_epaper_enabled | bool }}"
+    base_uart_epaper_should_edit_boot_config: >-
+      {{
+        (uart_epaper_enable_hardware_uart | bool)
+        or (uart_epaper_reserve_gpio_wakeup | bool)
+        or (uart_epaper_reserve_gpio_reset | bool)
+      }}
+  when: uart_epaper_enabled | bool
+
+- name: Probe Raspberry Pi boot config candidate paths for UART e-paper
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ uart_epaper_boot_config_candidates }}"
+  register: base_uart_epaper_boot_config_probe
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+
+- name: Select detected Raspberry Pi boot config path for UART e-paper
+  ansible.builtin.set_fact:
+    base_uart_epaper_boot_config_path: >-
+      {{
+        (
+          base_uart_epaper_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+
+- name: Warn when no boot config path is detected for UART e-paper
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ uart_epaper_boot_config_candidates }};
+      skipping UART e-paper boot config safely.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) == 0
+
+- name: Fail when UART e-paper boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ uart_epaper_boot_config_candidates }}.
+      Cannot apply UART e-paper settings safely on this OS/image.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - base_uart_epaper_should_edit_boot_config | bool
+    - uart_epaper_fail_if_boot_config_missing | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) == 0
+
+- name: Probe cmdline candidate paths for UART e-paper serial console setting
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ uart_epaper_cmdline_candidates }}"
+  register: base_uart_epaper_cmdline_probe
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+
+- name: Select detected cmdline path for UART e-paper serial console setting
+  ansible.builtin.set_fact:
+    base_uart_epaper_cmdline_path: >-
+      {{
+        (
+          base_uart_epaper_cmdline_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+
+- name: Warn when no cmdline path is detected for UART e-paper
+  ansible.builtin.debug:
+    msg: >-
+      No supported cmdline path detected from candidates={{ uart_epaper_cmdline_candidates }};
+      skipping serial-console disable safely.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) == 0
+
+- name: Fail when UART e-paper cmdline path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported cmdline file found in {{ uart_epaper_cmdline_candidates }}.
+      Cannot disable serial console safely on this OS/image.
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - uart_epaper_fail_if_cmdline_missing | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) == 0
+
+- name: Enable UART hardware on Raspberry Pi 5 for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^dtparam=uart0='
+    line: dtparam=uart0=on
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_enable_hardware_uart | bool
+    - base_is_pi5 | bool
+    - uart_epaper_configure_pi5_uart0 | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_hw_uart_config
+  become: true
+
+- name: Enable UART hardware on non-Pi5 for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^enable_uart='
+    line: enable_uart=1
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_enable_hardware_uart | bool
+    - not (base_is_pi5 | bool)
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_hw_uart_config
+  become: true
+
+- name: Reserve WAKE_UP GPIO for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^gpio={{ uart_epaper_wakeup_gpio }}='
+    line: "gpio={{ uart_epaper_wakeup_gpio }}=op,{{ uart_epaper_wakeup_gpio_state }}"
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_reserve_gpio_wakeup | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_gpio_wakeup_config
+  become: true
+
+- name: Reserve RST GPIO for UART e-paper
+  ansible.builtin.lineinfile:
+    path: "{{ base_uart_epaper_boot_config_path }}"
+    regexp: '^gpio={{ uart_epaper_reset_gpio }}='
+    line: "gpio={{ uart_epaper_reset_gpio }}=op,{{ uart_epaper_reset_gpio_state }}"
+    state: present
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_reserve_gpio_reset | bool
+    - (base_uart_epaper_boot_config_path | default('') | length) > 0
+  register: base_uart_epaper_gpio_reset_config
+  become: true
+
+- name: Remove serial console mapping from cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: '(^| )console=(serial0|ttyAMA0|ttyS0),[0-9]+(?= |$)'
+    replace: ''
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_console_strip
+  become: true
+
+- name: Normalize extra whitespace in cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: ' {2,}'
+    replace: ' '
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_whitespace
+  become: true
+
+- name: Remove leading whitespace in cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: '^ '
+    replace: ''
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_leading
+  become: true
+
+- name: Remove trailing whitespace in cmdline for UART e-paper
+  ansible.builtin.replace:
+    path: "{{ base_uart_epaper_cmdline_path }}"
+    regexp: ' $'
+    replace: ''
+  when:
+    - base_uart_epaper_should_configure | bool
+    - uart_epaper_disable_serial_console | bool
+    - (base_uart_epaper_cmdline_path | default('') | length) > 0
+  register: base_uart_epaper_cmdline_trailing
+  become: true
+
+- name: Detect Raspberry Pi cameras via camera stack tools
+  ansible.builtin.shell: |
+    set -o pipefail
+    if command -v rpicam-hello >/dev/null 2>&1; then
+      rpicam-hello --list-cameras 2>/dev/null || true
+    elif command -v libcamera-hello >/dev/null 2>&1; then
+      libcamera-hello --list-cameras 2>/dev/null || true
+    else
+      true
+    fi
+  args:
+    executable: /bin/bash
+  register: base_ai_camera_list
+  changed_when: false
+  failed_when: false
+
+- name: Compute AI Camera detection state
+  ansible.builtin.set_fact:
+    ai_camera_hw_detected: >-
+      {{
+        ((base_ai_camera_list.stdout | default('')
+          | regex_search(ai_camera_detect_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none)
+      }}
+
+- name: Compute AI Camera application flag
+  ansible.builtin.set_fact:
+    base_ai_camera_should_configure: >-
+      {{
+        (ai_camera_enabled | bool)
+        and
+        ((not ai_camera_require_detection | bool) or ai_camera_hw_detected)
+      }}
+
+- name: Report AI Camera configuration skip when IMX500 is not detected
+  ansible.builtin.debug:
+    msg: >-
+      ai_camera_enabled=true but IMX500 was not detected via camera stack tools;
+      skipping AI Camera package install safely.
+  when:
+    - ai_camera_enabled | bool
+    - ai_camera_require_detection | bool
+    - not ai_camera_hw_detected | bool
+
+- name: Fail when AI Camera detection is required but IMX500 is not detected
+  ansible.builtin.fail:
+    msg: >-
+      ai_camera_enabled=true but IMX500 was not detected.
+      Ensure the camera is connected and enabled, then retry.
+  when:
+    - ai_camera_enabled | bool
+    - ai_camera_require_detection | bool
+    - ai_camera_fail_if_not_detected | bool
+    - not ai_camera_hw_detected | bool
+
+- name: Compute M.2 HAT+ detection state
+  ansible.builtin.set_fact:
+    base_nvme_memory_hat_detected: >-
+      {{
+        ((((base_hat_vendor | default('') | trim) ~ ' ' ~ (base_hat_product | default('') | trim))
+          | regex_search(nvme_memory_hat_match_patterns | map('regex_escape') | join('|'), ignorecase=True))
+        is not none)
+      }}
+
+- name: Compute NVMe memory provisioning flag
+  ansible.builtin.set_fact:
+    base_nvme_memory_should_configure: >-
+      {{
+        (nvme_memory_enabled | bool)
+        and
+        ((not nvme_memory_require_hat_detection | bool) or base_nvme_memory_hat_detected)
+      }}
+
+- name: Probe Raspberry Pi boot config candidate paths for NVMe PCIe enablement
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ nvme_memory_boot_config_candidates }}"
+  register: base_nvme_boot_config_probe
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+
+- name: Select detected Raspberry Pi boot config path for NVMe PCIe enablement
+  ansible.builtin.set_fact:
+    base_nvme_boot_config_path: >-
+      {{
+        (
+          base_nvme_boot_config_probe.results
+          | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='stat.path')
+          | list
+          | first
+        )
+        | default('')
+      }}
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+
+- name: Warn when no Raspberry Pi boot config path is detected for NVMe PCIe enablement
+  ansible.builtin.debug:
+    msg: >-
+      No supported boot config path detected from candidates={{ nvme_memory_boot_config_candidates }};
+      skipping NVMe PCIe config safely.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+    - (base_nvme_boot_config_path | default('') | length) == 0
+
+- name: Fail when NVMe PCIe boot config path is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      No supported boot config file found in {{ nvme_memory_boot_config_candidates }}.
+      Cannot apply NVMe PCIe config safely on this OS/image.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+    - nvme_memory_fail_if_boot_config_missing | bool
+    - (base_nvme_boot_config_path | default('') | length) == 0
+
+- name: Ensure PCIe interface is explicitly enabled for NVMe
+  ansible.builtin.lineinfile:
+    path: "{{ base_nvme_boot_config_path }}"
+    regexp: '^dtparam=pciex1($|=)'
+    line: dtparam=pciex1
+    state: present
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_ensure_pcie_enabled | bool
+    - (base_nvme_boot_config_path | default('') | length) > 0
+  register: nvme_pcie_enable_config
+  become: true
+
+- name: Reboot after NVMe PCIe configuration change
+  ansible.builtin.reboot:
+    msg: Reboot initiated by Ansible after NVMe PCIe configuration.
+    reboot_timeout: 900
+    post_reboot_delay: 10
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_pcie_enable_config is defined
+    - nvme_pcie_enable_config.changed
+  become: true
+
+- name: Report NVMe configuration skip when M.2 HAT+ is not detected
+  ansible.builtin.debug:
+    msg: >-
+      nvme_memory_enabled=true but no matching M.2 HAT+ was detected;
+      skipping NVMe memory provisioning. Detected vendor='{{ base_hat_vendor }}',
+      product='{{ base_hat_product }}'.
+  when:
+    - nvme_memory_enabled | bool
+    - nvme_memory_require_hat_detection | bool
+    - not base_nvme_memory_hat_detected | bool
+
+- name: Detect root filesystem source device
+  ansible.builtin.command: findmnt -n -o SOURCE /
+  register: base_root_source
+  changed_when: false
+  failed_when: false
+  when: base_nvme_memory_should_configure | bool
+
+- name: Detect root parent block device
+  ansible.builtin.command: "lsblk -no PKNAME {{ base_root_source.stdout | trim }}"
+  register: base_root_parent
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_root_source.stdout | default('') | trim) is match('^/dev/')
+
+- name: List block devices for NVMe selection
+  ansible.builtin.command: lsblk -J -o NAME,TYPE,PATH
+  register: base_lsblk_json
+  changed_when: false
+  failed_when: false
+  when: base_nvme_memory_should_configure | bool
+
+- name: Compute candidate NVMe disks
+  ansible.builtin.set_fact:
+    base_nvme_disks: >-
+      {{
+        ((base_lsblk_json.stdout | default('{"blockdevices": []}') | from_json).blockdevices
+          | selectattr('type', 'equalto', 'disk')
+          | selectattr('name', 'match', '^nvme')
+          | map(attribute='path')
+          | list)
+      }}
+    base_root_parent_path: >-
+      {{
+        '/dev/' ~ (base_root_parent.stdout | default('') | trim)
+        if (
+          base_root_parent is defined
+          and (base_root_parent.stdout | default('') | trim | length) > 0
+        )
+        else ''
+      }}
+  when: base_nvme_memory_should_configure | bool
+
+- name: Select NVMe target disk
+  ansible.builtin.set_fact:
+    base_nvme_target_disk: >-
+      {{
+        (nvme_memory_target_device | trim)
+        if (nvme_memory_target_device | default('') | trim | length) > 0
+        else
+        ((base_nvme_disks | reject('equalto', base_root_parent_path) | list | first) | default(''))
+      }}
+  when: base_nvme_memory_should_configure | bool
+
+- name: Warn when no eligible NVMe disk is found
+  ansible.builtin.debug:
+    msg: >-
+      No eligible non-root NVMe disk found for provisioning; skipping.
+      root_source='{{ base_root_source.stdout | default('') | trim }}',
+      root_parent='{{ base_root_parent_path | default('') }}',
+      nvme_disks={{ base_nvme_disks | default([]) }}.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_disk | default('') | length) == 0
+
+- name: Fail when NVMe target disk is required but missing
+  ansible.builtin.fail:
+    msg: >-
+      nvme_memory_enabled=true but no eligible non-root NVMe disk was found.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_fail_if_no_device | bool
+    - (base_nvme_target_disk | default('') | length) == 0
+
+- name: Read selected NVMe disk topology
+  ansible.builtin.command: "lsblk -J -o NAME,TYPE,PATH {{ base_nvme_target_disk }}"
+  register: base_nvme_target_topology
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_disk | default('') | length) > 0
+
+- name: Compute selected NVMe block device for filesystem/mount
+  ansible.builtin.set_fact:
+    base_nvme_target_block: >-
+      {{
+        (
+          (
+            ((base_nvme_target_topology.stdout | from_json).blockdevices | first).children
+            | default([])
+            | selectattr('type', 'equalto', 'part')
+            | map(attribute='path')
+            | list
+            | first
+          )
+          if (nvme_memory_use_first_partition_if_present | bool)
+          else ''
+        )
+        | default(base_nvme_target_disk, true)
+      }}
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_disk | default('') | length) > 0
+
+- name: Detect filesystem type on selected NVMe block
+  ansible.builtin.command: "lsblk -no FSTYPE {{ base_nvme_target_block }}"
+  register: base_nvme_fstype
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_block | default('') | length) > 0
+
+- name: Create filesystem on selected NVMe block only when missing
+  ansible.builtin.command: >-
+    mkfs.{{ nvme_memory_filesystem }} -F -L {{ nvme_memory_label }} {{ base_nvme_target_block }}
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_block | default('') | length) > 0
+    - (base_nvme_fstype.stdout | default('') | trim | length) == 0
+  register: base_nvme_mkfs
+  become: true
+
+- name: Resolve UUID for selected NVMe block
+  ansible.builtin.command: "blkid -s UUID -o value {{ base_nvme_target_block }}"
+  register: base_nvme_uuid
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_target_block | default('') | length) > 0
+
+- name: Fail when UUID is required but missing for NVMe target
+  ansible.builtin.fail:
+    msg: >-
+      Could not resolve UUID for NVMe target {{ base_nvme_target_block }}; refusing to write fstab.
+  when:
+    - base_nvme_memory_should_configure | bool
+    - nvme_memory_fail_if_no_uuid | bool
+    - (base_nvme_target_block | default('') | length) > 0
+    - (base_nvme_uuid.stdout | default('') | trim | length) == 0
+
+- name: Ensure NVMe mount point exists
+  ansible.builtin.file:
+    path: "{{ nvme_memory_mount_point }}"
+    state: directory
+    owner: "{{ nvme_memory_mount_owner }}"
+    group: "{{ nvme_memory_mount_group }}"
+    mode: "{{ nvme_memory_mount_mode }}"
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+  become: true
+
+- name: Ensure NVMe fstab entry is present
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^[^#].*\\s{{ nvme_memory_mount_point | regex_escape }}\\s"
+    line: "UUID={{ base_nvme_uuid.stdout | trim }} {{ nvme_memory_mount_point }} {{ nvme_memory_filesystem }} {{ nvme_memory_fstab_opts }} 0 2"
+    state: present
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+  register: base_nvme_fstab
+  become: true
+
+- name: Check if NVMe mount point is already mounted
+  ansible.builtin.command: "mountpoint -q {{ nvme_memory_mount_point }}"
+  register: base_nvme_mountpoint
+  changed_when: false
+  failed_when: false
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
+
+- name: Mount NVMe filesystem from fstab
+  ansible.posix.mount:
+    path: "{{ nvme_memory_mount_point }}"
+    src: "UUID={{ base_nvme_uuid.stdout | trim }}"
+    fstype: "{{ nvme_memory_filesystem }}"
+    opts: "{{ nvme_memory_fstab_opts }}"
+    state: mounted
+  when:
+    - base_nvme_memory_should_configure | bool
+    - (base_nvme_uuid.stdout | default('') | trim | length) > 0
   become: true
 
 - name: Update apt cache
@@ -41,6 +1423,148 @@
       - python3-pip
       - pciutils
     state: present
+  become: true
+
+- name: Install ALSA utilities for DAC verification and defaults
+  ansible.builtin.apt:
+    name:
+      - alsa-utils
+    state: present
+  when: base_audio_dac_should_configure | bool
+  become: true
+
+- name: Install Raspberry Pi AI Camera runtime firmware and tools
+  ansible.builtin.apt:
+    name: "{{ ai_camera_install_packages }}"
+    state: present
+  when: base_ai_camera_should_configure | bool
+  register: base_ai_camera_install
+  become: true
+
+- name: Install optional Picamera2 OpenCV extras for AI Camera examples
+  ansible.builtin.apt:
+    name: "{{ ai_camera_picamera2_extra_packages }}"
+    state: present
+  when:
+    - base_ai_camera_should_configure | bool
+    - ai_camera_install_picamera2_opencv_extras | bool
+  register: base_ai_camera_extras_install
+  become: true
+
+- name: Install Raspberry Pi Sense HAT package and dependencies
+  ansible.builtin.apt:
+    name: "{{ sense_hat_install_packages }}"
+    state: present
+  when: base_sense_hat_should_configure | bool
+  register: base_sense_hat_install
+  become: true
+
+- name: Install UPS HAT(E) userspace dependencies
+  ansible.builtin.apt:
+    name: "{{ ups_hat_e_install_packages }}"
+    state: present
+  when: base_ups_hat_e_should_configure | bool
+  register: base_ups_hat_e_install
+  become: true
+
+- name: Install pyserial for UART e-paper
+  ansible.builtin.apt:
+    name: "{{ uart_epaper_pyserial_package }}"
+    state: present
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - uart_epaper_install_pyserial | bool
+  register: base_uart_epaper_pyserial_install
+  become: true
+
+- name: Ensure UART e-paper application directory exists
+  ansible.builtin.file:
+    path: "{{ uart_epaper_app_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: base_uart_epaper_should_configure | default(false) | bool
+  become: true
+
+- name: Deploy UART e-paper application script
+  ansible.builtin.copy:
+    src: epaper.py
+    dest: "{{ uart_epaper_app_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: base_uart_epaper_should_configure | default(false) | bool
+  register: base_uart_epaper_app_deploy
+  become: true
+
+- name: Deploy UART e-paper systemd unit
+  ansible.builtin.template:
+    src: uart-epaper.service.j2
+    dest: "/etc/systemd/system/{{ uart_epaper_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  when: base_uart_epaper_should_configure | default(false) | bool
+  register: base_uart_epaper_service_unit
+  become: true
+
+- name: Probe UART device nodes for e-paper service
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: >-
+    {{
+      ['/dev/ttyAMA0', '/dev/serial0', '/dev/ttyS0']
+      if (uart_epaper_serial_device | lower) == 'auto'
+      else [uart_epaper_serial_device]
+    }}
+  register: base_uart_epaper_serial_nodes
+  when: base_uart_epaper_should_configure | default(false) | bool
+
+- name: Compute UART e-paper serial-node availability
+  ansible.builtin.set_fact:
+    base_uart_epaper_serial_node_available: >-
+      {{
+        (
+          base_uart_epaper_serial_nodes.results
+          | selectattr('stat.exists', 'equalto', true)
+          | list
+          | length
+        ) > 0
+      }}
+  when: base_uart_epaper_should_configure | default(false) | bool
+
+- name: Warn when UART e-paper serial node is not available
+  ansible.builtin.debug:
+    msg: >-
+      UART e-paper enabled but no serial node is currently present for
+      serial_device={{ uart_epaper_serial_device }}.
+      Checked: {{ base_uart_epaper_serial_nodes.results | map(attribute='stat.path') | list }}.
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - uart_epaper_require_serial_device | bool
+    - not (base_uart_epaper_serial_node_available | default(false) | bool)
+
+- name: Fail when UART e-paper serial node is required but not available
+  ansible.builtin.fail:
+    msg: >-
+      uart_epaper_enabled=true but no required UART serial device is available.
+      Expected serial_device={{ uart_epaper_serial_device }}.
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - uart_epaper_require_serial_device | bool
+    - uart_epaper_fail_if_serial_device_missing | bool
+    - not (base_uart_epaper_serial_node_available | default(false) | bool)
+
+- name: Ensure UART e-paper service is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ uart_epaper_service_name }}"
+    enabled: true
+    daemon_reload: true
+    state: restarted
+  when:
+    - base_uart_epaper_should_configure | default(false) | bool
+    - (base_uart_epaper_serial_node_available | default(false) | bool) or not (uart_epaper_require_serial_device | bool)
   become: true
 
 - name: Check installed Node.js version
@@ -100,15 +1624,118 @@
     msg: Reboot initiated by Ansible after baseline upgrade.
     reboot_timeout: 900
     post_reboot_delay: 10
-  when: reboot_required.stat.exists or eeprom_update.changed
+  when:
+    - reboot_required.stat.exists or eeprom_update.changed or
+      (base_ups_hat_e_i2c_arm_config is defined and base_ups_hat_e_i2c_arm_config.changed) or
+      (base_ups_hat_e_usb_current_config is defined and base_ups_hat_e_usb_current_config.changed) or
+      (base_ups_hat_e_install is defined and base_ups_hat_e_install.changed) or
+      (base_sense_hat_i2c_config is defined and base_sense_hat_i2c_config.changed) or
+      (base_sense_hat_install is defined and base_sense_hat_install.changed) or
+      (base_uart_epaper_hw_uart_config is defined and base_uart_epaper_hw_uart_config.changed) or
+      (base_uart_epaper_gpio_wakeup_config is defined and base_uart_epaper_gpio_wakeup_config.changed) or
+      (base_uart_epaper_gpio_reset_config is defined and base_uart_epaper_gpio_reset_config.changed) or
+      (base_uart_epaper_cmdline_console_strip is defined and base_uart_epaper_cmdline_console_strip.changed) or
+      (base_uart_epaper_cmdline_whitespace is defined and base_uart_epaper_cmdline_whitespace.changed) or
+      (base_uart_epaper_cmdline_leading is defined and base_uart_epaper_cmdline_leading.changed) or
+      (base_uart_epaper_cmdline_trailing is defined and base_uart_epaper_cmdline_trailing.changed) or
+      (base_touch_display2_auto_detect_config is defined and base_touch_display2_auto_detect_config.changed) or
+      (base_touch_display2_disable_touch_config is defined and base_touch_display2_disable_touch_config.changed) or
+      (base_touch_display2_overlay_config is defined and base_touch_display2_overlay_config.changed) or
+      (base_ai_camera_install is defined and base_ai_camera_install.changed) or
+      (base_ai_camera_extras_install is defined and base_ai_camera_extras_install.changed) or
+      (base_dac_audio_dtparam_config is defined and base_dac_audio_dtparam_config.changed) or
+      (base_dac_overlay_config is defined and base_dac_overlay_config.changed)
   become: true
 
-- name: Verify Hailo PCIe device is detected
-  ansible.builtin.shell: |
-    set -o pipefail
-    lspci | grep -i hailo
-  args:
-    executable: /bin/bash
+- name: Detect ALSA playback cards
+  ansible.builtin.command: aplay -l
+  register: base_aplay_cards
+  changed_when: false
+  failed_when: false
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+
+- name: Compute DAC ALSA card selection
+  ansible.builtin.set_fact:
+    base_audio_dac_alsa_match_regex: "{{ audio_dac_alsa_card_match_patterns | map('regex_escape') | join('|') }}"
+    base_audio_dac_alsa_card: >-
+      {{
+        (
+          base_aplay_cards.stdout
+          | default('')
+          | regex_findall('\\[(.*?)\\]')
+          | select('search', audio_dac_alsa_card_match_patterns | map('regex_escape') | join('|'), ignorecase=True)
+          | list
+          | first
+        )
+        | default('')
+      }}
+    base_audio_dac_alsa_card_detected: "{{ (base_audio_dac_alsa_card | length) > 0 }}"
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+
+- name: Configure default ALSA device for DAC
+  ansible.builtin.copy:
+    dest: /etc/asound.conf
+    mode: "0644"
+    content: |
+      pcm.!default {
+        type hw
+        card {{ base_audio_dac_alsa_card }}
+      }
+      ctl.!default {
+        type hw
+        card {{ base_audio_dac_alsa_card }}
+      }
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool
+    - base_audio_dac_alsa_card_detected | bool
+  become: true
+
+- name: Warn when DAC ALSA card is not detected
+  ansible.builtin.debug:
+    msg: >-
+      DAC appears enabled in config, but no matching ALSA playback card was found.
+      aplay rc={{ base_aplay_cards.rc | default(-1) }} output='{{ base_aplay_cards.stdout | default('') | trim }}'.
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+    - not base_audio_dac_alsa_card_detected | bool
+
+- name: Fail when DAC ALSA card is required but not detected
+  ansible.builtin.fail:
+    msg: >-
+      No matching DAC ALSA card detected after configuration. Confirm overlay and hardware seating.
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_fail_if_alsa_card_missing | bool
+    - audio_dac_configure_alsa_default | bool or audio_dac_verify_playback_device | bool
+    - not base_audio_dac_alsa_card_detected | bool
+
+- name: Report detected DAC ALSA card
+  ansible.builtin.debug:
+    msg: "Configured default ALSA card: {{ base_audio_dac_alsa_card }}"
+  when:
+    - base_audio_dac_should_configure | bool
+    - audio_dac_verify_playback_device | bool
+    - base_audio_dac_alsa_card_detected | bool
+
+- name: Detect Hailo PCIe device presence
+  ansible.builtin.command: lspci -nn
   register: hailo_lspci
   changed_when: false
-  failed_when: hailo_lspci.rc != 0
+  failed_when: false
+
+- name: Compute Hailo hardware detection state
+  ansible.builtin.set_fact:
+    hailo_hw_detected: >-
+      {{
+        (hailo_lspci.stdout | default('') | regex_search('hailo', ignorecase=True)) is not none
+      }}
+
+- name: Report Hailo hardware detection state
+  ansible.builtin.debug:
+    msg: "Hailo hardware detected: {{ hailo_hw_detected | bool }}"
