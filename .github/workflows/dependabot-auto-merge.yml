@@ -1,0 +1,41 @@
+name: dependabot-auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  auto-approve-and-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Update branch when behind
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          MERGE_STATE="$(gh pr view "${PR_NUMBER}" --repo "${{ github.repository }}" --json mergeStateStatus --jq '.mergeStateStatus')"
+          if [[ "${MERGE_STATE}" == "BEHIND" ]]; then
+            gh api \
+              --method PUT \
+              "repos/${{ github.repository }}/pulls/${PR_NUMBER}/update-branch"
+          fi
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr merge "${PR_NUMBER}" --repo "${{ github.repository }}" --auto --rebase --delete-branch=false
