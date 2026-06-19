@@ -32,3 +32,69 @@ chat_smoke_retry_delay_seconds: 5
 validate_require_openclaw_tailscale_on: true
 openclaw_validate_user: "{{ pi_user | default(ansible_user | default('pi')) }}"
 openclaw_validate_user_home: "/home/{{ openclaw_validate_user }}"
+
+# Optional Raspberry Pi AI Camera (IMX500) validation controls.
+ai_camera_enabled: false
+ai_camera_require_detection: true
+ai_camera_detect_match_patterns:
+  - imx500
+  - ai camera
+validate_ai_camera_check_firmware_files: true
+validate_ai_camera_firmware_files:
+  - /lib/firmware/imx500_loader.fpk
+  - /lib/firmware/imx500_firmware.fpk
+
+# Optional Raspberry Pi Sense HAT validation controls.
+sense_hat_enabled: false
+sense_hat_require_detection: true
+sense_hat_detect_match_patterns:
+  - Sense HAT
+  - Raspberry Pi Sense HAT
+validate_sense_hat_check_python_import: true
+
+# Optional Raspberry Pi Touch Display 2 validation controls.
+touch_display2_enabled: false
+touch_display2_require_detection: true
+touch_display2_fail_if_not_detected: false
+touch_display2_detect_match_patterns:
+  - 720x1280
+  - ili9881
+  - touch display 2
+
+# Optional Waveshare UPS HAT (E) validation controls.
+ups_hat_e_enabled: false
+ups_hat_e_require_detection: true
+ups_hat_e_fail_if_not_detected: false
+ups_hat_e_enable_usb_max_current: false
+ups_hat_e_detect_match_patterns:
+  - UPS HAT (E)
+  - UPS HAT E
+  - Waveshare
+ups_hat_e_i2c_detect_addresses:
+  - "1-002d"
+ups_hat_e_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+validate_ups_hat_e_check_packages: true
+validate_ups_hat_e_packages:
+  - i2c-tools
+  - python3-smbus
+
+# Optional Waveshare 4.3" UART e-Paper validation controls.
+uart_epaper_enabled: false
+uart_epaper_require_serial_device: true
+uart_epaper_serial_device: auto
+uart_epaper_service_name: uart-epaper
+uart_epaper_boot_config_candidates:
+  - /boot/firmware/config.txt
+  - /boot/config.txt
+uart_epaper_cmdline_candidates:
+  - /boot/firmware/cmdline.txt
+  - /boot/cmdline.txt
+uart_epaper_wakeup_gpio: 26
+uart_epaper_reset_gpio: 27
+validate_uart_epaper_require_uart_enabled: true
+validate_uart_epaper_require_serial_console_disabled: true
+validate_uart_epaper_require_gpio_reservation: true
+validate_uart_epaper_check_pyserial: true
+validate_uart_epaper_pyserial_package: python3-serial

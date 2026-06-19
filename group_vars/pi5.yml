@@ -16,7 +16,97 @@ tailscale_advertise_exit_node: false
 # Common local overrides:
 hailo_model: llama3.2:3b
 use_sanitizer_proxy: true
+openclaw_auto_fallback_to_external_when_no_hailo: true
+
+# Waveshare/Core 2-CH PCIe expansion board + Raspberry Pi AI HAT+ 2 (safe, detection-gated tuning)
+pcie_force_enable: true
+pcie_force_enable_require_hat_detection: true
+pcie_expansion_hat_declared_present: true
+pcie_expansion_fail_if_not_enumerated: true
+pcie_force_enable_fail_if_boot_config_missing: false
+pcie_gen3_enabled: false
+pcie_gen3_require_hat_detection: true
+pcie_gen3_fail_if_boot_config_missing: false
+pcie_expansion_hat_match_patterns:
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
+pcie_gen3_hat_match_patterns:
+  - Waveshare
+  - PCIe TO 2-CH PCIe HAT
+  - 2-CH PCIe Adapter Board
+  - PCIe Expansion Board for Raspberry Pi 5
+  - Raspberry Pi Ltd
+  - AI HAT
+  - Raspberry Pi AI HAT
+
+# DAC Pro HAT audio (guarded by runtime HAT detection in the base role)
+audio_dac_enabled: true
+audio_dac_require_hat_detection: true
+audio_dac_overlay: hifiberry-dacplus-pro
+audio_dac_configure_alsa_default: true
+audio_dac_verify_playback_device: true
+audio_dac_fail_if_alsa_card_missing: false
+
+# Official Raspberry Pi M.2 HAT+ (SC1166) NVMe memory mount for AI persistence.
+# Safe mode: detection-gated and only formats when no filesystem is present.
+nvme_memory_enabled: true
+nvme_memory_require_hat_detection: true
+nvme_memory_fail_if_no_device: false
+nvme_memory_ensure_pcie_enabled: true
+nvme_memory_mount_point: /srv/ai-memory
+nvme_memory_filesystem: ext4
+nvme_memory_label: AI_MEMORY
+nvme_memory_fstab_opts: defaults,noatime
+
+# Raspberry Pi AI Camera (IMX500): install only if detected.
+ai_camera_enabled: true
+ai_camera_require_detection: true
+ai_camera_fail_if_not_detected: false
+ai_camera_install_picamera2_opencv_extras: false
+
+# Raspberry Pi Touch Display 2: configure only if detected.
+touch_display2_enabled: true
+touch_display2_require_detection: true
+touch_display2_fail_if_not_detected: false
+touch_display2_force_display_auto_detect: true
+touch_display2_disable_touchscreen: false
+touch_display2_configure_touch_overlay: false
+touch_display2_model: 7inch
+touch_display2_touch_overlay_options: []
+
+# Raspberry Pi Sense HAT: install and enable only if detected.
+sense_hat_enabled: true
+sense_hat_require_detection: true
+sense_hat_fail_if_not_detected: false
+sense_hat_ensure_i2c_arm: true
+
+# Waveshare UPS HAT (E): configure/install only if detected.
+ups_hat_e_enabled: true
+ups_hat_e_require_detection: true
+ups_hat_e_fail_if_not_detected: false
+ups_hat_e_ensure_i2c_arm: true
+ups_hat_e_enable_usb_max_current: true
 
 # Use direct Tailnet bind mode for stable remote access over Tailscale mesh.
 # OpenClaw listens on tailnet IP at port 18789 (no HTTPS, no Serve wrapper).
 openclaw_gateway_bind_mode: tailnet
+
+# Waveshare 4.3" UART e-Paper module wiring and service automation.
+uart_epaper_enabled: true
+uart_epaper_enable_hardware_uart: true
+uart_epaper_disable_serial_console: true
+uart_epaper_reserve_gpio_wakeup: true
+uart_epaper_wakeup_gpio: 26
+uart_epaper_wakeup_gpio_state: dl
+uart_epaper_reserve_gpio_reset: true
+uart_epaper_reset_gpio: 27
+uart_epaper_reset_gpio_state: dh
+uart_epaper_install_pyserial: true
+uart_epaper_serial_device: auto
+uart_epaper_baud_rate: 115200
+uart_epaper_refresh_seconds: 300

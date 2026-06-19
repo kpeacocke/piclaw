@@ -7,5 +7,38 @@
   vars_files:
     - ../group_vars/pi5.yml
 
+  pre_tasks:
+    - name: Detect Hailo PCIe device presence
+      ansible.builtin.command: lspci -nn
+      register: validate_lspci_detect
+      changed_when: false
+      failed_when: false
+
+    - name: Compute Hailo hardware detection state
+      ansible.builtin.set_fact:
+        hailo_hw_detected: >-
+          {{
+            (validate_lspci_detect.stdout | default('') | regex_search('hailo', ignorecase=True)) is not none
+          }}
+
+    - name: Auto-fallback OpenClaw profile when Hailo is not detected
+      ansible.builtin.set_fact:
+        openclaw_profile: external-power
+      when:
+        - (openclaw_auto_fallback_to_external_when_no_hailo | default(false) | bool)
+        - (hailo_run_if_detected | default(true) | bool)
+        - openclaw_profile == 'local-safe'
+        - not (hailo_hw_detected | bool)
+
+    - name: Report OpenClaw profile fallback decision
+      ansible.builtin.debug:
+        msg: >-
+          Hailo was not detected; verify will use external-power profile assertions.
+      when:
+        - (openclaw_auto_fallback_to_external_when_no_hailo | default(false) | bool)
+        - (hailo_run_if_detected | default(true) | bool)
+        - openclaw_profile == 'external-power'
+        - not (hailo_hw_detected | bool)
+
   roles:
     - role: validate

@@ -32,6 +32,10 @@
     }
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "containerEnv": {
+    "SONAR_HOST_URL": "${localEnv:SONAR_HOST_URL}",
+    "SONAR_TOKEN": "${localEnv:SONAR_TOKEN}"
+  },
   "remoteEnv": {
     "PATH": "/home/vscode/.local/bin:/usr/local/share/nvm/current/bin:${containerEnv:PATH}"
   },
