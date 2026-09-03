@@ -4,5 +4,5 @@ yamllint>=1.38.0
 pre-commit>=4.6.2
 molecule>=26.8.0
 pytest>=9.1.0
-mypy>=2.3.0
+mypy>=2.3.1
 pip-tools>=7.6.1
