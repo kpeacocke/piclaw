@@ -12,6 +12,7 @@ on:
       - requirements-dev.txt
       - requirements-dev.lock
       - .pre-commit-config.yaml
+      - .github/workflows/molecule.yml
   push:
     branches:
       - main
@@ -22,6 +23,7 @@ on:
       - requirements-dev.txt
       - requirements-dev.lock
       - .pre-commit-config.yaml
+      - .github/workflows/molecule.yml
 
 permissions:
   contents: read
