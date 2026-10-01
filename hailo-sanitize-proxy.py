@@ -42,7 +42,7 @@ CORS_ALLOWED_ORIGINS = {
         "HAILO_PROXY_ALLOWED_ORIGINS",
         "http://localhost:8787,http://127.0.0.1:8787",
     ).split(",")
-    if item.strip()
+    if item.strip() and "\r" not in item and "\n" not in item
 }
 CORS_ALLOWED_ORIGIN_PREFIXES = [
     item.strip()
@@ -1037,6 +1037,8 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def _is_origin_allowed(self, origin):
         if not origin:
             return CORS_ALLOW_NO_ORIGIN
+        if "\r" in origin or "\n" in origin:
+            return False
         if origin in CORS_ALLOWED_ORIGINS:
             return True
         return any(origin.startswith(prefix) for prefix in CORS_ALLOWED_ORIGIN_PREFIXES)
@@ -1097,12 +1099,17 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
 
     def _send_cors_headers(self):
         origin = self._origin_header()
-        if not origin:
+        if not origin or "\r" in origin or "\n" in origin:
             return
-        if origin not in CORS_ALLOWED_ORIGINS:
+
+        allowed_origin = next(
+            (candidate for candidate in CORS_ALLOWED_ORIGINS if candidate == origin),
+            None,
+        )
+        if allowed_origin is None:
             return
         self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Access-Control-Allow-Origin", allowed_origin)
         self.send_header("Access-Control-Allow-Methods", CORS_ALLOW_METHODS)
         self.send_header("Access-Control-Allow-Headers", CORS_ALLOW_HEADERS)
         self.send_header("Access-Control-Max-Age", "86400")

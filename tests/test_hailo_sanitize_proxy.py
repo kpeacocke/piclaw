@@ -1,0 +1,55 @@
+"""Regression tests for the Hailo proxy's CORS response headers."""
+
+# pylint: disable=protected-access
+
+import importlib.util
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+
+PROXY_PATH = Path(__file__).resolve().parents[1] / "hailo-sanitize-proxy.py"
+PROXY_SPEC = importlib.util.spec_from_file_location("hailo_sanitize_proxy", PROXY_PATH)
+if PROXY_SPEC is None or PROXY_SPEC.loader is None:
+    raise ImportError("Could not load hailo-sanitize-proxy.py")
+
+PROXY = importlib.util.module_from_spec(PROXY_SPEC)
+PROXY_SPEC.loader.exec_module(PROXY)
+
+
+class CorsHeaderTests(unittest.TestCase):
+    """Verify request origins cannot inject response headers."""
+
+    def test_origin_with_newline_is_rejected_even_if_configured(self) -> None:
+        """Reject CR/LF even when an invalid value enters the allowlist."""
+        origin = "http://localhost:8787\r\nX-Injected: yes"
+        sent_headers = []
+        handler = SimpleNamespace(
+            _origin_header=lambda: origin,
+            send_header=lambda name, value: sent_headers.append((name, value)),
+        )
+
+        with patch.object(PROXY, "CORS_ALLOWED_ORIGINS", {origin}):
+            self.assertFalse(PROXY.ProxyHandler._is_origin_allowed(handler, origin))
+            PROXY.ProxyHandler._send_cors_headers(handler)
+
+        self.assertNotIn(("Access-Control-Allow-Origin", origin), sent_headers)
+
+    def test_allowed_origin_is_emitted_from_configuration(self) -> None:
+        """Preserve the CORS header for a valid configured origin."""
+        origin = "http://localhost:8787"
+        sent_headers = []
+        handler = SimpleNamespace(
+            _origin_header=lambda: origin,
+            send_header=lambda name, value: sent_headers.append((name, value)),
+        )
+
+        with patch.object(PROXY, "CORS_ALLOWED_ORIGINS", {origin}):
+            PROXY.ProxyHandler._send_cors_headers(handler)
+
+        self.assertIn(("Access-Control-Allow-Origin", origin), sent_headers)
+
+
+if __name__ == "__main__":
+    unittest.main()
