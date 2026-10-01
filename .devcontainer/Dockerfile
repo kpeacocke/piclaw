@@ -1,11 +1,14 @@
-FROM mcr.microsoft.com/devcontainers/python:dev-3.14-trixie@sha256:de0e677fbf35384da5c723ab101ba8f03af95f1f29d5e4134ecb021dc7e96dd1
+FROM mcr.microsoft.com/devcontainers/python@sha256:de0e677fbf35384da5c723ab101ba8f03af95f1f29d5e4134ecb021dc7e96dd1
 
-USER root
+USER 0:0
 
 # Provide clipboard helpers needed by tools like Snyk in terminal sessions.
 RUN rm -f /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/yarn.list.save \
   && apt-get update \
-  && apt-get install -y --no-install-recommends xclip xsel wl-clipboard \
+  && apt-get install -y --no-install-recommends \
+    xclip=0.13-4 \
+    xsel=1.2.1-1 \
+    wl-clipboard=2.2.1-2 \
   && rm -rf /var/lib/apt/lists/*
 
 # Install SonarScanner CLI once in the image.
@@ -28,7 +31,7 @@ RUN set -eux; \
     ln -sf "/opt/sonar-scanner-${SCANNER_VERSION}-${SCANNER_ARCH}/bin/sonar-scanner" /usr/local/bin/sonar-scanner; \
     rm -f "/tmp/${SCANNER_ZIP}"
 
-USER vscode
+USER 1000:1000
 
 # Python packages installed as the vscode user land in ~/.local/bin.
 ENV PATH="/home/vscode/.local/bin:${PATH}"
@@ -39,5 +42,5 @@ COPY --chown=vscode:vscode requirements-dev.lock /tmp/piclaw/requirements-dev.lo
 COPY --chown=vscode:vscode collections/requirements.yml /tmp/piclaw/collections-requirements.yml
 
 RUN set -eux; \
-  pip install --require-hashes -r /tmp/piclaw/requirements-dev.lock; \
+  pip install --no-cache-dir --require-hashes -r /tmp/piclaw/requirements-dev.lock; \
     ansible-galaxy collection install -r /tmp/piclaw/collections-requirements.yml
