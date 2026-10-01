@@ -212,6 +212,8 @@ def _summarize_request_body(body_bytes):
             if not isinstance(msg, dict):
                 continue
             role = msg.get("role", "unknown")
+            if not isinstance(role, str):
+                role = "unknown"
             role_counts[role] = role_counts.get(role, 0) + 1
             content = msg.get("content", "")
             if isinstance(content, list):
@@ -341,6 +343,8 @@ def sanitize_chat_body(body_bytes, tool_prompt_enabled=True):
         k: v for k, v in data.items() if k in ALLOWED_CHAT_FIELDS and v is not None
     }
     tools_payload = sanitized.pop("tools", None)
+    if "messages" in sanitized and not isinstance(sanitized["messages"], list):
+        sanitized["messages"] = []
     if not tool_prompt_enabled:
         tools_payload = None
     if tools_payload is not None:
@@ -364,12 +368,14 @@ def sanitize_chat_body(body_bytes, tool_prompt_enabled=True):
                 parts = []
                 for part in clean_msg["content"]:
                     if isinstance(part, dict) and part.get("type") == "text":
-                        parts.append(part.get("text", ""))
+                        parts.append(str(part.get("text", "")))
                     elif isinstance(part, str):
                         parts.append(part)
                 clean_msg["content"] = "\n".join(parts)
             if clean_msg.get("content") is None:
                 clean_msg["content"] = ""
+            elif not isinstance(clean_msg["content"], str):
+                clean_msg["content"] = str(clean_msg["content"])
             clean_msgs.append(clean_msg)
         sanitized["messages"] = clean_msgs
 
