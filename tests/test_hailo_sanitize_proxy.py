@@ -3,6 +3,7 @@
 # pylint: disable=protected-access
 
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -49,6 +50,40 @@ class CorsHeaderTests(unittest.TestCase):
             PROXY.ProxyHandler._send_cors_headers(handler)
 
         self.assertIn(("Access-Control-Allow-Origin", origin), sent_headers)
+
+
+class ChatBodySanitizationTests(unittest.TestCase):
+    """Verify malformed text parts do not break request sanitization."""
+
+    def test_structured_role_does_not_crash_logging(self) -> None:
+        """Untrusted roles must not become unhashable dictionary keys."""
+        roles: tuple[object, ...] = ([], {}, ["user"])
+        for role in roles:
+            with self.subTest(role=role):
+                body = json.dumps({"messages": [{"role": role}]}).encode()
+                self.assertIn('"unknown": 1', PROXY._summarize_request_body(body))
+
+    def test_invalid_messages_container_is_emptied(self) -> None:
+        """Only lists may be passed to message simplification."""
+        for messages in (17, "user", {"role": "user"}):
+            with self.subTest(messages=messages):
+                body = json.dumps({"messages": messages}).encode()
+                result = PROXY.sanitize_chat_body(body, tool_prompt_enabled=False)
+                self.assertEqual(json.loads(result)["messages"], [])
+
+    def test_scalar_system_content_is_normalized(self) -> None:
+        """Malformed content must not crash system prompt length calculation."""
+        body = b'{"messages":[{"role":"system","content":17}]}'
+        result = PROXY.sanitize_chat_body(body, tool_prompt_enabled=False)
+        self.assertIsInstance(json.loads(result)["messages"], list)
+
+    def test_non_string_text_part_is_converted_to_string(self) -> None:
+        """Convert numeric text content before joining message parts."""
+        body = b'{"messages":[{"role":"user","content":[{"type":"text","text":17}]}]}'
+
+        sanitized = PROXY.sanitize_chat_body(body, tool_prompt_enabled=False)
+
+        self.assertEqual(json.loads(sanitized)["messages"][-1]["content"], "17")
 
 
 if __name__ == "__main__":
