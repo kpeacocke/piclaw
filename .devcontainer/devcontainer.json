@@ -10,7 +10,7 @@
       "version": "20"
     },
     "ghcr.io/devcontainers/features/java:1": {
-      "version": "21"
+      "version": "21.0.12+1-ms"
     }
   },
   "customizations": {
