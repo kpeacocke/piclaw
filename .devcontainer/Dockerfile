@@ -3,13 +3,20 @@ FROM mcr.microsoft.com/devcontainers/python@sha256:de0e677fbf35384da5c723ab101ba
 USER 0:0
 
 # Provide clipboard helpers needed by tools like Snyk in terminal sessions.
-RUN rm -f /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/yarn.list.save \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+  rm -f /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/yarn.list.save; \
+  sed -i \
+    -e 's|http://deb.debian.org/debian-security|https://snapshot.debian.org/archive/debian-security/20260316T000000Z|' \
+    -e 's|http://deb.debian.org/debian|https://snapshot.debian.org/archive/debian/20260316T000000Z|' \
+    /etc/apt/sources.list.d/debian.sources; \
+  sed -i '/^Signed-By/i Check-Valid-Until: no' /etc/apt/sources.list.d/debian.sources; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
     xclip=0.13-4 \
     xsel=1.2.1-1 \
     wl-clipboard=2.2.1-2 \
-  && rm -rf /var/lib/apt/lists/*
+  ; \
+  rm -rf /var/lib/apt/lists/*
 
 # Install SonarScanner CLI once in the image.
 ARG SCANNER_VERSION=6.2.1.4610
