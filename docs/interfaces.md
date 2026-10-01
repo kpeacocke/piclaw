@@ -3,8 +3,9 @@
 ## Ansible deployment
 
 Run the playbooks from the repository root with `ansible-playbook` and an
-inventory containing the `pi5` group. The default inventory is configured in
-`ansible.cfg`. `bootstrap.yml` installs the platform, `openclaw.yml` deploys
+inventory containing the `pi5` group. Pass the inventory explicitly, for example
+`ansible-playbook -i inventories/prod/hosts.yml playbooks/bootstrap.yml -l pi5`.
+`ansible.cfg` does not set a default inventory. `bootstrap.yml` installs the platform, `openclaw.yml` deploys
 services, and `verify.yml` checks the resulting deployment.
 
 Inputs are inventory host addresses and SSH credentials, role defaults,
