@@ -364,7 +364,7 @@ def sanitize_chat_body(body_bytes, tool_prompt_enabled=True):
                 parts = []
                 for part in clean_msg["content"]:
                     if isinstance(part, dict) and part.get("type") == "text":
-                        parts.append(part.get("text", ""))
+                        parts.append(str(part.get("text", "")))
                     elif isinstance(part, str):
                         parts.append(part)
                 clean_msg["content"] = "\n".join(parts)
