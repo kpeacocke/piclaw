@@ -57,7 +57,8 @@ class ChatBodySanitizationTests(unittest.TestCase):
 
     def test_structured_role_does_not_crash_logging(self) -> None:
         """Untrusted roles must not become unhashable dictionary keys."""
-        for role in ([], {}, ["user"]):
+        roles: tuple[object, ...] = ([], {}, ["user"])
+        for role in roles:
             with self.subTest(role=role):
                 body = json.dumps({"messages": [{"role": role}]}).encode()
                 self.assertIn('"unknown": 1', PROXY._summarize_request_body(body))
