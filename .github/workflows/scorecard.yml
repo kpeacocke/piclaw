@@ -23,6 +23,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
+      issues: write
       security-events: write
     steps:
       - name: Harden the runner
@@ -40,6 +41,41 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
+
+      - name: Remind about OpenSSF Best Practices badge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          title="OpenSSF Best Practices badge reminder"
+          finding="$(jq -r '[.runs[]?.results[]? | select(.ruleId == "CIIBestPracticesID") | .message.text] | first // empty' results.sarif)"
+          issue="$(gh issue list --repo "${REPOSITORY}" --state all --limit 100 --json number,title,state --jq '.[] | select(.title == "OpenSSF Best Practices badge reminder") | "\(.number) \(.state)"' | tail -n 1)"
+
+          if [[ "${finding}" == *"badge detected: InProgress"* ]]; then
+            body="$(printf '%s\n\n%s\n\n%s\n' \
+              "${finding}" \
+              "Complete the OpenSSF Best Practices profile at https://www.bestpractices.dev/." \
+              "This reminder is updated by Scorecard and closed automatically when the badge leaves InProgress.")"
+            if [[ -n "${issue}" ]]; then
+              issue_number="${issue%% *}"
+              issue_state="${issue##* }"
+              gh issue edit "${issue_number}" --repo "${REPOSITORY}" --body "${body}"
+              if [[ "${issue_state}" == "CLOSED" ]]; then
+                gh issue reopen "${issue_number}" --repo "${REPOSITORY}"
+              fi
+            else
+              gh issue create --repo "${REPOSITORY}" --title "${title}" --body "${body}"
+            fi
+          elif [[ -n "${issue}" ]]; then
+            issue_number="${issue%% *}"
+            issue_state="${issue##* }"
+            if [[ "${issue_state}" == "OPEN" ]]; then
+              gh issue close "${issue_number}" --repo "${REPOSITORY}" \
+                --comment "Scorecard no longer reports an InProgress Best Practices badge."
+            fi
+          fi
 
       - name: Upload Scorecard SARIF
         uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
