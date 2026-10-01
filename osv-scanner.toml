@@ -1,0 +1,29 @@
+[[IgnoredVulns]]
+id = "GHSA-32p4-gm2c-wmch"
+ignoreUntil = 2027-01-01
+reason = "ansible-core is constrained to >=2.21.4,<2.22 and locked at 2.21.4; this advisory's affected ranges end below 2.21.4. Recheck on dependency refresh."
+
+[[IgnoredVulns]]
+id = "GHSA-7j69-qfc3-2fq9"
+ignoreUntil = 2027-01-01
+reason = "ansible-core is constrained to >=2.21.4,<2.22 and locked at 2.21.4; this advisory's affected ranges end below 2.21.4. Recheck on dependency refresh."
+
+[[IgnoredVulns]]
+id = "GHSA-99w6-3xph-cx78"
+ignoreUntil = 2027-01-01
+reason = "ansible-core is constrained to >=2.21.4,<2.22 and locked at 2.21.4; this advisory's affected ranges end below 2.21.4. Recheck on dependency refresh."
+
+[[IgnoredVulns]]
+id = "GHSA-h24r-m9qc-pvpg"
+ignoreUntil = 2027-01-01
+reason = "ansible-core is constrained to >=2.21.4,<2.22 and locked at 2.21.4; this advisory's affected ranges end below 2.21.4. Recheck on dependency refresh."
+
+[[IgnoredVulns]]
+id = "GHSA-jpxc-vmjf-9fcj"
+ignoreUntil = 2027-01-01
+reason = "ansible-core is constrained to >=2.21.4,<2.22 and locked at 2.21.4; this advisory's affected ranges end below 2.21.4. Recheck on dependency refresh."
+
+[[IgnoredVulns]]
+id = "GHSA-w8p5-mx5w-cpqj"
+ignoreUntil = 2027-01-01
+reason = "ansible-core is constrained to >=2.21.4,<2.22 and locked at 2.21.4; this advisory's affected ranges end below 2.21.4. Recheck on dependency refresh."
