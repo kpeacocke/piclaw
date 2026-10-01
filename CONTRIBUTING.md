@@ -48,3 +48,22 @@ Commit both files together in the same PR.
 - Do not commit secrets, hostnames, or private network details beyond placeholders.
 - Keep inventory host details environment-specific in your own deployment fork or private vars.
 - Pin `openclaw_installer_version` in `group_vars/pi5.yml` to a specific commit SHA before running against hardware.
+
+## Quality and review policy
+
+Use the coding standards enforced by `.pre-commit-config.yaml`, `.ansible-lint`,
+`.yamllint`, and `mypy.ini`. Fix lint, type and security findings before merging.
+Run `pytest` for regression tests and the Molecule syntax scenario. Add a
+regression test for bug fixes and tests for new behavior where practical; explain
+any hardware-only validation and test limitations in the pull request.
+Update interface documentation when inputs or outputs change.
+
+Changes should receive independent human review before merging. Reviewers check
+correctness, tests, secret handling, input validation, dependency provenance and
+deployment impact. Automated review supports this process but does not replace
+an independent approval. Release notes follow `CHANGELOG.md`.
+
+Use GitHub Issues for bugs and enhancements, and the security policy for private
+vulnerability reports. Maintainers triage actionable reports and explain whether
+they will fix, defer or decline them; discussions remain in the public tracker
+except for sensitive security reports.

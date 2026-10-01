@@ -48,6 +48,9 @@ jobs:
       - name: Run MyPy
         run: mypy --config-file mypy.ini
 
+      - name: Run regression tests and Molecule syntax scenario
+        run: pytest
+
       - name: Syntax check playbooks
         run: |
           ansible-playbook --syntax-check playbooks/bootstrap.yml

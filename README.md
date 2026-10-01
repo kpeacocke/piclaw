@@ -1,5 +1,6 @@
 # Pi 5 + AI HAT+ 2 OpenClaw Stack
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12383/badge)](https://www.bestpractices.dev/projects/12383)
 [![CI](https://github.com/kpeacocke/piclaw/actions/workflows/ansible-ci.yml/badge.svg)](https://github.com/kpeacocke/piclaw/actions/workflows/ansible-ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
@@ -287,6 +288,9 @@ ssh pi@100.100.100.50 journalctl -u openclaw -n 50 -f
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, PRs, and release workflow.
+
+See [interface documentation](docs/interfaces.md) for playbook and proxy inputs and outputs,
+and [release notes](CHANGELOG.md) for the release policy and changes awaiting release.
 
 ## AWX Setup
 
