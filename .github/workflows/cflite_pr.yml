@@ -21,7 +21,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           language: python
-          keep-unaffected-fuzz-targets: true
           sanitizer: address
       - name: Run fuzzers
         id: run
