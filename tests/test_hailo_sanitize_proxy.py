@@ -54,6 +54,46 @@ class CorsHeaderTests(unittest.TestCase):
 class ChatBodySanitizationTests(unittest.TestCase):
     """Verify malformed text parts do not break request sanitization."""
 
+    def test_structured_role_does_not_crash_logging(self) -> None:
+        """Untrusted roles must not become unhashable dictionary keys."""
+        roles: tuple[object, ...] = ([], {}, ["user"], None, 17, False)
+        for role in roles:
+            with self.subTest(role=role):
+                body = json.dumps({"messages": [{"role": role}]}).encode()
+                self.assertIn('"unknown": 1', PROXY._summarize_request_body(body))
+
+    def test_string_roles_are_preserved_in_summary(self) -> None:
+        """Valid roles retain their original counts."""
+        body = b'{"messages":[{"role":"user"},{"role":"user"},{"role":"system"}]}'
+        summary = PROXY._summarize_request_body(body)
+        self.assertIn('"user": 2', summary)
+        self.assertIn('"system": 1', summary)
+
+    def test_invalid_messages_container_is_emptied(self) -> None:
+        """Only lists may be passed to message simplification."""
+        for messages in (17, "user", {"role": "user"}, False):
+            with self.subTest(messages=messages):
+                body = json.dumps({"messages": messages}).encode()
+                result = PROXY.sanitize_chat_body(body, tool_prompt_enabled=False)
+                self.assertEqual(json.loads(result)["messages"], [])
+
+    def test_non_string_content_is_normalized(self) -> None:
+        """Malformed content cannot break prompt processing or user messages."""
+        contents: tuple[object, ...] = (17, False, {"text": "hello"}, None)
+        for content in contents:
+            for role in ("system", "user"):
+                with self.subTest(content=content, role=role):
+                    body = json.dumps(
+                        {"messages": [{"role": role, "content": content}]}
+                    ).encode()
+                    result = json.loads(
+                        PROXY.sanitize_chat_body(body, tool_prompt_enabled=False)
+                    )
+                    self.assertIsInstance(result["messages"][0]["content"], str)
+                    if role == "user":
+                        expected = "" if content is None else str(content)
+                        self.assertEqual(result["messages"][-1]["content"], expected)
+
     def test_non_string_text_part_is_converted_to_string(self) -> None:
         """Convert numeric text content before joining message parts."""
         body = b'{"messages":[{"role":"user","content":[{"type":"text","text":17}]}]}'
