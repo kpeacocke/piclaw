@@ -2,7 +2,6 @@
 
 fuzzer="$SRC/piclaw/fuzz/hailo_proxy_fuzzer.py"
 fuzzer_basename="$(basename -s .py "$fuzzer")"
-
 compile_python_fuzzer "$fuzzer" \
   --add-data "$SRC/piclaw/hailo-sanitize-proxy.py:." \
   --hidden-import http.server \

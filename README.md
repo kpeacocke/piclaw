@@ -269,6 +269,11 @@ pytest                                              # Python unit tests
 
 All checks pass by default before commit (pre-commit hooks).
 
+ClusterFuzzLite runs the proxy request-parser fuzzer on pull requests. Its seed
+corpus includes malformed roles, message containers, and content values. The build
+uses OSS-Fuzz's `compile_python_fuzzer` helper so the packaged target includes the
+discovery marker and sanitizer setup required by CI.
+
 ### Running on Hardware
 
 Test code changes on a real Pi before submitting a PR:
