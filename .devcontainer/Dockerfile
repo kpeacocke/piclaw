@@ -50,4 +50,4 @@ COPY --chown=vscode:vscode collections/requirements.yml /tmp/piclaw/collections-
 
 RUN set -eux; \
   pip install --no-cache-dir --require-hashes -r /tmp/piclaw/requirements-dev.lock; \
-    ansible-galaxy collection install -r /tmp/piclaw/collections-requirements.yml
+    ansible-galaxy collection install --no-cache -r /tmp/piclaw/collections-requirements.yml
