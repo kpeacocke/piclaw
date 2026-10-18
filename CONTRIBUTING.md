@@ -37,6 +37,10 @@ pip-compile --generate-hashes --allow-unsafe --output-file=requirements-dev.lock
 
 Commit both files together in the same PR.
 
+CI installs Galaxy collections with `--no-cache` to avoid stale or incomplete
+Galaxy API responses. Use the same option when troubleshooting collection
+installation failures locally.
+
 ## Branching and pull requests
 
 - Create focused branches with one concern per PR.
