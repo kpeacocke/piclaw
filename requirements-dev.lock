@@ -18,9 +18,9 @@ ansible-core==2.21.5 \
     #   ansible-compat
     #   ansible-lint
     #   molecule
-ansible-lint==26.9.0 \
-    --hash=sha256:4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50 \
-    --hash=sha256:cb3265888f30815de0dcf0964d34768b45c98bb4361eea7eb42c0342e81b51b4
+ansible-lint==26.10.1 \
+    --hash=sha256:a746c6f3cb5719d1c202bc14e956ef3b0eca704025d1aa92707a27fc73ed73ea \
+    --hash=sha256:cc26d405ee38c3390e80ec18c4137b5685c36d03ce7d4d8233b0470d9a0e21e9
     # via -r requirements-dev.txt
 ast-serialize==0.11.2 \
     --hash=sha256:00119a8fb8c1dc0f1fab023f4d8071fa49e3b0208ee54d589fd463c16ab0124e \
@@ -568,9 +568,9 @@ mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
     # via markdown-it-py
-molecule==26.9.0 \
-    --hash=sha256:1c44254eb173d0a3a48217b874d19bfa436614fb0c6faa75d9b192a843360188 \
-    --hash=sha256:ad8f468c01f35a27cd12858e24c86ad27344dc1076845f03d78fdb563fb69f82
+molecule==26.10.0 \
+    --hash=sha256:32533aaba78c29eed80bcaab5d03ff63fe48b8f43071cf77953f391e0732d439 \
+    --hash=sha256:deb351b11f1b329ae3b3c856d5b1c1d9a9d8f8d40ba717c77e54b1778b4557d2
     # via -r requirements-dev.txt
 mypy==2.4.0 \
     --hash=sha256:058165f564ccf559c68c70fec2091fca5891110480210c22594635e3f6683437 \
@@ -673,9 +673,9 @@ pluggy==1.6.0 \
     # via
     #   molecule
     #   pytest
-pre-commit==4.6.2 \
-    --hash=sha256:8f5d7bfb021ecdbcd9d49d89847082dd24172ccde534390081a679ad046e2441 \
-    --hash=sha256:e2dde9a75d3bce11bd3831c26d134df00a2803c1d818be6a0383c3dcda25dc4e
+pre-commit==4.7.0 \
+    --hash=sha256:1f3deee12b914c8fa184bd2b5953391c2e4f36763e403d4a23dc9983fa7c6e86 \
+    --hash=sha256:2e229038ad3656081b70c27913157e4b636ef306f643f024a8a8e3f0f7b2f877
     # via -r requirements-dev.txt
 pycparser==3.0 \
     --hash=sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29 \
