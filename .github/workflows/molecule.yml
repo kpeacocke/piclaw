@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --require-hashes -r requirements-dev.lock
-          ansible-galaxy collection install -r collections/requirements.yml
+          ansible-galaxy collection install --no-cache -r collections/requirements.yml
 
       - name: Run Molecule syntax scenario
         run: molecule test -s default
