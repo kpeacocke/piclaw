@@ -25,7 +25,7 @@ repos:
         always_run: false
         files: ^(playbooks/|roles/|inventories/|group_vars/)
         additional_dependencies:
-          - ansible-core>=2.21.4,<2.22
+          - ansible-core>=2.22.0,<2.23
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.16.3
     hooks:
